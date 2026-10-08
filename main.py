@@ -43,13 +43,13 @@ if not TOKEN:
 
 intents = discord.Intents.default()
 
-# استقبال رسائل اللاعبين، مهم للألعاب التي تعتمد على الكتابة
+# مهم جدًا لألعاب الكتابة والتخمين
 intents.message_content = True
 
-# معرفة أعضاء السيرفر
+# معرفة الرتب والأعضاء
 intents.members = True
 
-# لا نحتاج حالة Online/Idle للأعضاء
+# غير مطلوب للألعاب
 intents.presences = False
 
 
@@ -61,26 +61,48 @@ class GameBot(commands.Bot):
 
     def __init__(self):
         super().__init__(
-            command_prefix="!",
+            command_prefix="-",
             intents=intents,
-            help_command=None
+            help_command=None,
+            case_insensitive=True
         )
 
+        # قاعدة البيانات
         self.database = Database()
+
+        # نظام الألعاب
         self.game_system = GameSystem(self)
 
-    async def setup_hook(self):
-        """
-        تحميل نظام الألعاب ومزامنة Slash Commands.
-        """
+    # ========================================================
+    # SETUP
+    # ========================================================
 
-        await self.game_system.setup()
+    async def setup_hook(self):
+
+        logger.info("🔄 جاري تحميل نظام الألعاب...")
+
+        try:
+            await self.game_system.setup()
+
+            logger.info(
+                "✅ تم تحميل نظام الألعاب بنجاح."
+            )
+
+        except Exception:
+            logger.exception(
+                "❌ فشل تحميل نظام الألعاب."
+            )
+            raise
+
+        # ====================================================
+        # SYNC SLASH COMMANDS
+        # ====================================================
 
         try:
             synced = await self.tree.sync()
 
             logger.info(
-                "✅ تم مزامنة %s أمر.",
+                "✅ تم مزامنة %s أمر Slash.",
                 len(synced)
             )
 
@@ -89,7 +111,14 @@ class GameBot(commands.Bot):
                 "❌ حدث خطأ أثناء مزامنة أوامر Discord."
             )
 
+    # ========================================================
+    # READY
+    # ========================================================
+
     async def on_ready(self):
+
+        logger.info("=" * 60)
+
         logger.info(
             "✅ تم تشغيل البوت: %s",
             self.user
@@ -105,9 +134,14 @@ class GameBot(commands.Bot):
             len(self.guilds)
         )
 
-        # حالة البوت
+        logger.info("=" * 60)
+
+        # ====================================================
+        # BOT STATUS
+        # ====================================================
+
         activity = discord.Game(
-            name="/games"
+            name="-العاب"
         )
 
         await self.change_presence(
@@ -115,11 +149,16 @@ class GameBot(commands.Bot):
             activity=activity
         )
 
+    # ========================================================
+    # MESSAGE ERROR
+    # ========================================================
+
     async def on_command_error(
         self,
         ctx: commands.Context,
         error: commands.CommandError
     ):
+
         # تجاهل الأوامر غير الموجودة
         if isinstance(
             error,
@@ -127,6 +166,21 @@ class GameBot(commands.Bot):
         ):
             return
 
+        # تجاهل أخطاء الصلاحيات بشكل هادئ
+        if isinstance(
+            error,
+            commands.MissingPermissions
+        ):
+            try:
+                await ctx.send(
+                    "❌ ما عندك صلاحية لاستخدام هذا الأمر."
+                )
+            except Exception:
+                pass
+
+            return
+
+        # تسجيل أي خطأ آخر
         logger.error(
             "❌ Command Error: %s",
             error
@@ -147,16 +201,28 @@ bot = GameBot()
 async def main():
 
     async with bot:
+
         await bot.start(TOKEN)
 
+
+# ============================================================
+# RUN
+# ============================================================
 
 if __name__ == "__main__":
 
     try:
+
         asyncio.run(main())
 
     except KeyboardInterrupt:
 
         logger.info(
             "🛑 تم إيقاف البوت."
+        )
+
+    except Exception:
+
+        logger.exception(
+            "❌ توقف البوت بسبب خطأ."
         )
