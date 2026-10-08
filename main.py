@@ -38,18 +38,18 @@ if not TOKEN:
 
 
 # ============================================================
-# DISCORD INTENTS
+# INTENTS
 # ============================================================
 
 intents = discord.Intents.default()
 
-# مهم جدًا لألعاب الكتابة والتخمين
+# مهم جدًا لألعاب التخمين والكتابة
 intents.message_content = True
 
-# معرفة الرتب والأعضاء
+# مهم لمعرفة رتب الأعضاء
 intents.members = True
 
-# غير مطلوب للألعاب
+# غير مطلوب
 intents.presences = False
 
 
@@ -60,6 +60,7 @@ intents.presences = False
 class GameBot(commands.Bot):
 
     def __init__(self):
+
         super().__init__(
             command_prefix="-",
             intents=intents,
@@ -67,14 +68,21 @@ class GameBot(commands.Bot):
             case_insensitive=True
         )
 
-        # قاعدة البيانات
+        # ====================================================
+        # DATABASE
+        # ====================================================
+
         self.database = Database()
 
-        # نظام الألعاب
+        # ====================================================
+        # GAME SYSTEM
+        # ====================================================
+
         self.game_system = GameSystem(self)
 
+
     # ========================================================
-    # SETUP
+    # SETUP HOOK
     # ========================================================
 
     async def setup_hook(self):
@@ -82,6 +90,7 @@ class GameBot(commands.Bot):
         logger.info("🔄 جاري تحميل نظام الألعاب...")
 
         try:
+
             await self.game_system.setup()
 
             logger.info(
@@ -89,9 +98,11 @@ class GameBot(commands.Bot):
             )
 
         except Exception:
+
             logger.exception(
                 "❌ فشل تحميل نظام الألعاب."
             )
+
             raise
 
         # ====================================================
@@ -99,6 +110,7 @@ class GameBot(commands.Bot):
         # ====================================================
 
         try:
+
             synced = await self.tree.sync()
 
             logger.info(
@@ -107,9 +119,11 @@ class GameBot(commands.Bot):
             )
 
         except Exception:
+
             logger.exception(
-                "❌ حدث خطأ أثناء مزامنة أوامر Discord."
+                "❌ حدث خطأ أثناء مزامنة أوامر Slash."
             )
+
 
     # ========================================================
     # READY
@@ -137,7 +151,7 @@ class GameBot(commands.Bot):
         logger.info("=" * 60)
 
         # ====================================================
-        # BOT STATUS
+        # STATUS
         # ====================================================
 
         activity = discord.Game(
@@ -149,8 +163,9 @@ class GameBot(commands.Bot):
             activity=activity
         )
 
+
     # ========================================================
-    # MESSAGE ERROR
+    # COMMAND ERROR
     # ========================================================
 
     async def on_command_error(
@@ -159,32 +174,118 @@ class GameBot(commands.Bot):
         error: commands.CommandError
     ):
 
-        # تجاهل الأوامر غير الموجودة
+        # ----------------------------------------------------
+        # COMMAND NOT FOUND
+        # ----------------------------------------------------
+
         if isinstance(
             error,
             commands.CommandNotFound
         ):
             return
 
-        # تجاهل أخطاء الصلاحيات بشكل هادئ
+
+        # ----------------------------------------------------
+        # MISSING PERMISSIONS
+        # ----------------------------------------------------
+
         if isinstance(
             error,
             commands.MissingPermissions
         ):
+
             try:
+
                 await ctx.send(
                     "❌ ما عندك صلاحية لاستخدام هذا الأمر."
                 )
+
             except Exception:
                 pass
 
             return
 
-        # تسجيل أي خطأ آخر
-        logger.error(
-            "❌ Command Error: %s",
-            error
+
+        # ----------------------------------------------------
+        # CHECK FAILURE
+        # ----------------------------------------------------
+
+        if isinstance(
+            error,
+            commands.CheckFailure
+        ):
+
+            try:
+
+                await ctx.send(
+                    "❌ ما تقدر تستخدم هذا الأمر هنا."
+                )
+
+            except Exception:
+                pass
+
+            return
+
+
+        # ----------------------------------------------------
+        # MISSING ARGUMENT
+        # ----------------------------------------------------
+
+        if isinstance(
+            error,
+            commands.MissingRequiredArgument
+        ):
+
+            try:
+
+                await ctx.send(
+                    "❌ ناقصك أحد الخيارات المطلوبة."
+                )
+
+            except Exception:
+                pass
+
+            return
+
+
+        # ----------------------------------------------------
+        # BAD ARGUMENT
+        # ----------------------------------------------------
+
+        if isinstance(
+            error,
+            commands.BadArgument
+        ):
+
+            try:
+
+                await ctx.send(
+                    "❌ البيانات المدخلة غير صحيحة."
+                )
+
+            except Exception:
+                pass
+
+            return
+
+
+        # ----------------------------------------------------
+        # GENERIC ERROR
+        # ----------------------------------------------------
+
+        logger.exception(
+            "❌ Command Error:",
+            exc_info=error
         )
+
+        try:
+
+            await ctx.send(
+                "❌ حدث خطأ أثناء تنفيذ الأمر."
+            )
+
+        except Exception:
+            pass
 
 
 # ============================================================
@@ -195,7 +296,7 @@ bot = GameBot()
 
 
 # ============================================================
-# START BOT
+# MAIN
 # ============================================================
 
 async def main():
