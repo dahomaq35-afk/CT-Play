@@ -16,15 +16,17 @@ from discord import app_commands
 from discord.ext import commands
 
 try:
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageFilter
 except ImportError:
     Image = None
     ImageDraw = None
+    ImageFilter = None
 
 try:
     import config as cfg
 except ImportError:
     cfg = None
+
 
 # ============================================================
 # CONFIG
@@ -32,6 +34,7 @@ except ImportError:
 
 PREFIX = getattr(cfg, "PREFIX", "-")
 MAX_SETUP_SLOTS = getattr(cfg, "MAX_SETUP_SLOTS", 10)
+
 WIN_POINTS = getattr(cfg, "WIN_POINTS", 10)
 PARTICIPATION_POINTS = getattr(cfg, "PARTICIPATION_POINTS", 2)
 
@@ -52,6 +55,7 @@ EXPLOIT_LOGGING_ENABLED = getattr(
     cfg, "EXPLOIT_LOGGING_ENABLED", True
 )
 ADMIN_BYPASS_SETUP = getattr(cfg, "ADMIN_BYPASS_SETUP", True)
+
 
 # ============================================================
 # GAME COMMANDS
@@ -87,9 +91,11 @@ GAMES = [
 GAME_NAMES = {
     key: name for key, emoji, name, command in GAMES
 }
+
 GAME_COMMANDS = {
     key: command for key, emoji, name, command in GAMES
 }
+
 
 # ============================================================
 # GAME DATA
@@ -118,7 +124,6 @@ WORDS = [
     ("هاتف", ["جوال", "phone"]),
 ]
 
-# الرسومات تنشأ داخل البوت ولا تعتمد على صور من مواقع خارجية.
 DRAWINGS = [
     {"answer": "تفاحة", "aliases": ["تفاح", "apple"], "kind": "apple"},
     {"answer": "قطة", "aliases": ["قط", "بس", "cat"], "kind": "cat"},
@@ -186,6 +191,60 @@ COLORS = [
     ("بني", [], "🟫"),
 ]
 
+REPLIKA_SENTENCES = [
+    "انا احب البرمجة",
+    "اليوم الجو جميل",
+    "البوت سريع جدا",
+    "الالعاب ممتعة",
+    "هذا اختبار سرعة",
+    "ديسكورد رائع",
+]
+
+FAST_TYPE_WORDS = [
+    "سرعة",
+    "ديسكورد",
+    "العاب",
+    "برمجة",
+    "بوت",
+    "مسابقة",
+    "تحدي",
+    "سرعة الكتابة",
+]
+
+TEXT_SPLIT_WORDS = [
+    "ديسكورد",
+    "برمجة",
+    "مسابقة",
+    "روبوت",
+    "العاب",
+    "تحدي",
+]
+
+MERGE_TEXT_WORDS = [
+    "د ي س ك و ر د",
+    "ب ر م ج ة",
+    "م س ا ب ق ة",
+    "ا ل ع ا ب",
+    "ت ح د ي",
+]
+
+TEXT_REVERSE_WORDS = [
+    "ديسكورد",
+    "العاب",
+    "مسابقة",
+    "برمجة",
+    "بوت",
+    "تحدي",
+]
+
+FIND_EMOJIS = [
+    "😀", "😂", "😎", "🤖", "🐱",
+    "🐶", "🍎", "🍕", "⚽", "🔥",
+]
+
+ARABIC_LETTERS = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
+
+
 # ============================================================
 # TEXT HELPERS
 # ============================================================
@@ -213,10 +272,12 @@ def normalize(text):
 
     return re.sub(r"\s+", " ", text)
 
+
 def matches_answer(message, answer, aliases=None):
     target = normalize(message)
     options = [answer] + list(aliases or [])
     return any(normalize(option) == target for option in options)
+
 
 def embed(title, description, color=None):
     return discord.Embed(
@@ -225,8 +286,13 @@ def embed(title, description, color=None):
         color=color or discord.Color.blurple(),
     )
 
+
+# ============================================================
+# LOCAL DRAWING GENERATOR
+# ============================================================
+
 def make_drawing_file(kind):
-    """إنشاء رسمة PNG محليًا باستخدام Pillow."""
+    """إنشاء رسمة محلية مع تأثير التبكسل لتصعيب التخمين."""
     if Image is None or ImageDraw is None:
         raise RuntimeError(
             "مكتبة Pillow غير مثبتة. أضف Pillow إلى requirements.txt."
@@ -248,8 +314,8 @@ def make_drawing_file(kind):
     )
     draw = ImageDraw.Draw(image)
 
-    # إطار وخطوط زخرفية تتغير مع كل صورة.
     line_color = (70, 75, 90)
+
     draw.rounded_rectangle(
         (18, 18, 494, 494),
         radius=28,
@@ -273,45 +339,105 @@ def make_drawing_file(kind):
 
     def polygon(points, fill, outline=line_color):
         draw.polygon(points, fill=fill)
-        draw.line(points + [points[0]], fill=outline, width=7, joint="curve")
+        draw.line(
+            points + [points[0]],
+            fill=outline,
+            width=7,
+            joint="curve",
+        )
 
-    # إزاحة بسيطة لجعل شكل الرسمة متغيرًا في كل مرة.
     dx = random.randint(-12, 12)
     dy = random.randint(-10, 10)
 
     if kind == "apple":
         ellipse((155 + dx, 185 + dy, 270 + dx, 335 + dy), (225, 55, 55))
         ellipse((240 + dx, 185 + dy, 355 + dx, 335 + dy), (225, 55, 55))
-        draw.rectangle((224 + dx, 160 + dy, 284 + dx, 215 + dy), fill=(225, 55, 55))
-        line([(255 + dx, 195 + dy), (265 + dx, 135 + dy)], (105, 65, 35), 12)
-        ellipse((266 + dx, 133 + dy, 330 + dx, 165 + dy), (55, 160, 80), width=4)
+        draw.rectangle(
+            (224 + dx, 160 + dy, 284 + dx, 215 + dy),
+            fill=(225, 55, 55),
+        )
+        line(
+            [(255 + dx, 195 + dy), (265 + dx, 135 + dy)],
+            (105, 65, 35),
+            12,
+        )
+        ellipse(
+            (266 + dx, 133 + dy, 330 + dx, 165 + dy),
+            (55, 160, 80),
+            width=4,
+        )
 
     elif kind == "cat":
-        polygon([(145 + dx, 200 + dy), (155 + dx, 110 + dy), (220 + dx, 170 + dy)], (245, 190, 120))
-        polygon([(292 + dx, 170 + dy), (365 + dx, 110 + dy), (370 + dx, 205 + dy)], (245, 190, 120))
+        polygon(
+            [(145 + dx, 200 + dy), (155 + dx, 110 + dy), (220 + dx, 170 + dy)],
+            (245, 190, 120),
+        )
+        polygon(
+            [(292 + dx, 170 + dy), (365 + dx, 110 + dy), (370 + dx, 205 + dy)],
+            (245, 190, 120),
+        )
         ellipse((145 + dx, 155 + dy, 370 + dx, 370 + dy), (245, 190, 120))
-        ellipse((195 + dx, 225 + dy, 220 + dx, 250 + dy), (40, 40, 40), width=2)
-        ellipse((295 + dx, 225 + dy, 320 + dx, 250 + dy), (40, 40, 40), width=2)
-        polygon([(244 + dx, 265 + dy), (270 + dx, 265 + dy), (257 + dx, 280 + dy)], (220, 90, 100))
-        line([(257 + dx, 280 + dy), (257 + dx, 294 + dy)], width=4)
-        line([(230 + dx, 295 + dy), (185 + dx, 285 + dy)], width=4)
-        line([(285 + dx, 295 + dy), (330 + dx, 285 + dy)], width=4)
+        ellipse(
+            (195 + dx, 225 + dy, 220 + dx, 250 + dy),
+            (40, 40, 40),
+            width=2,
+        )
+        ellipse(
+            (295 + dx, 225 + dy, 320 + dx, 250 + dy),
+            (40, 40, 40),
+            width=2,
+        )
+        polygon(
+            [(244 + dx, 265 + dy), (270 + dx, 265 + dy), (257 + dx, 280 + dy)],
+            (220, 90, 100),
+        )
+        line(
+            [(257 + dx, 280 + dy), (257 + dx, 294 + dy)],
+            width=4,
+        )
+        line(
+            [(230 + dx, 295 + dy), (185 + dx, 285 + dy)],
+            width=4,
+        )
+        line(
+            [(285 + dx, 295 + dy), (330 + dx, 285 + dy)],
+            width=4,
+        )
 
     elif kind == "dog":
         ellipse((150 + dx, 150 + dy, 360 + dx, 360 + dy), (210, 160, 105))
         ellipse((130 + dx, 180 + dy, 190 + dx, 300 + dy), (145, 95, 55))
         ellipse((320 + dx, 180 + dy, 380 + dx, 300 + dy), (145, 95, 55))
-        ellipse((195 + dx, 225 + dy, 220 + dx, 250 + dy), (30, 30, 30), width=2)
-        ellipse((290 + dx, 225 + dy, 315 + dx, 250 + dy), (30, 30, 30), width=2)
-        ellipse((225 + dx, 265 + dy, 285 + dx, 310 + dy), (245, 225, 195))
-        ellipse((243 + dx, 270 + dy, 270 + dx, 290 + dy), (30, 30, 30), width=2)
+        ellipse(
+            (195 + dx, 225 + dy, 220 + dx, 250 + dy),
+            (30, 30, 30),
+            width=2,
+        )
+        ellipse(
+            (290 + dx, 225 + dy, 315 + dx, 250 + dy),
+            (30, 30, 30),
+            width=2,
+        )
+        ellipse(
+            (225 + dx, 265 + dy, 285 + dx, 310 + dy),
+            (245, 225, 195),
+        )
+        ellipse(
+            (243 + dx, 270 + dy, 270 + dx, 290 + dy),
+            (30, 30, 30),
+            width=2,
+        )
 
     elif kind == "pizza":
         polygon(
             [(120 + dx, 125 + dy), (395 + dx, 170 + dy), (245 + dx, 390 + dy)],
             (247, 195, 95),
         )
-        line([(120 + dx, 125 + dy), (395 + dx, 170 + dy)], (170, 95, 40), 18)
+        line(
+            [(120 + dx, 125 + dy), (395 + dx, 170 + dy)],
+            (170, 95, 40),
+            18,
+        )
         for px, py in [
             (225 + dx, 190 + dy),
             (310 + dx, 205 + dy),
@@ -319,7 +445,11 @@ def make_drawing_file(kind):
             (235 + dx, 310 + dy),
             (335 + dx, 235 + dy),
         ]:
-            ellipse((px, py, px + 28, py + 28), (205, 50, 45), width=3)
+            ellipse(
+                (px, py, px + 28, py + 28),
+                (205, 50, 45),
+                width=3,
+            )
 
     elif kind == "car":
         draw.rounded_rectangle(
@@ -340,8 +470,16 @@ def make_drawing_file(kind):
         )
         ellipse((135 + dx, 305 + dy, 205 + dx, 375 + dy), (45, 45, 50))
         ellipse((315 + dx, 305 + dy, 385 + dx, 375 + dy), (45, 45, 50))
-        ellipse((155 + dx, 325 + dy, 185 + dx, 355 + dy), (220, 220, 220), width=3)
-        ellipse((335 + dx, 325 + dy, 365 + dx, 355 + dy), (220, 220, 220), width=3)
+        ellipse(
+            (155 + dx, 325 + dy, 185 + dx, 355 + dy),
+            (220, 220, 220),
+            width=3,
+        )
+        ellipse(
+            (335 + dx, 325 + dy, 365 + dx, 355 + dy),
+            (220, 220, 220),
+            width=3,
+        )
 
     elif kind == "airplane":
         polygon(
@@ -369,61 +507,172 @@ def make_drawing_file(kind):
     elif kind == "bicycle":
         ellipse((95 + dx, 280 + dy, 215 + dx, 400 + dy), None, width=8)
         ellipse((300 + dx, 280 + dy, 420 + dx, 400 + dy), None, width=8)
-        line([(155 + dx, 340 + dy), (240 + dx, 240 + dy), (350 + dx, 340 + dy), (155 + dx, 340 + dy)], accent, 9)
-        line([(240 + dx, 240 + dy), (275 + dx, 340 + dy)], accent, 9)
-        line([(250 + dx, 235 + dy), (290 + dx, 235 + dy)], width=8)
-        line([(150 + dx, 335 + dy), (140 + dx, 310 + dy)], width=7)
-        line([(335 + dx, 340 + dy), (360 + dx, 240 + dy)], width=8)
+        line(
+            [
+                (155 + dx, 340 + dy),
+                (240 + dx, 240 + dy),
+                (350 + dx, 340 + dy),
+                (155 + dx, 340 + dy),
+            ],
+            accent,
+            9,
+        )
+        line(
+            [(240 + dx, 240 + dy), (275 + dx, 340 + dy)],
+            accent,
+            9,
+        )
+        line(
+            [(250 + dx, 235 + dy), (290 + dx, 235 + dy)],
+            width=8,
+        )
+        line(
+            [(150 + dx, 335 + dy), (140 + dx, 310 + dy)],
+            width=7,
+        )
+        line(
+            [(335 + dx, 340 + dy), (360 + dx, 240 + dy)],
+            width=8,
+        )
 
     elif kind == "ball":
-        ellipse((115 + dx, 115 + dy, 395 + dx, 395 + dy), (245, 245, 245), width=8)
-        polygon([(235 + dx, 195 + dy), (280 + dx, 205 + dy), (300 + dx, 250 + dy), (265 + dx, 285 + dy), (220 + dx, 260 + dy)], (40, 40, 45))
-        line([(235 + dx, 195 + dy), (185 + dx, 155 + dy)], width=5)
-        line([(280 + dx, 205 + dy), (350 + dx, 180 + dy)], width=5)
-        line([(300 + dx, 250 + dy), (365 + dx, 280 + dy)], width=5)
-        line([(265 + dx, 285 + dy), (260 + dx, 355 + dy)], width=5)
-        line([(220 + dx, 260 + dy), (155 + dx, 300 + dy)], width=5)
+        ellipse(
+            (115 + dx, 115 + dy, 395 + dx, 395 + dy),
+            (245, 245, 245),
+            width=8,
+        )
+        polygon(
+            [
+                (235 + dx, 195 + dy),
+                (280 + dx, 205 + dy),
+                (300 + dx, 250 + dy),
+                (265 + dx, 285 + dy),
+                (220 + dx, 260 + dy),
+            ],
+            (40, 40, 45),
+        )
+        line(
+            [(235 + dx, 195 + dy), (185 + dx, 155 + dy)],
+            width=5,
+        )
+        line(
+            [(280 + dx, 205 + dy), (350 + dx, 180 + dy)],
+            width=5,
+        )
+        line(
+            [(300 + dx, 250 + dy), (365 + dx, 280 + dy)],
+            width=5,
+        )
+        line(
+            [(265 + dx, 285 + dy), (260 + dx, 355 + dy)],
+            width=5,
+        )
+        line(
+            [(220 + dx, 260 + dy), (155 + dx, 300 + dy)],
+            width=5,
+        )
 
     elif kind == "tree":
-        draw.rectangle((225 + dx, 280 + dy, 290 + dx, 415 + dy), fill=(135, 85, 45), outline=line_color, width=5)
+        draw.rectangle(
+            (225 + dx, 280 + dy, 290 + dx, 415 + dy),
+            fill=(135, 85, 45),
+            outline=line_color,
+            width=5,
+        )
         ellipse((125 + dx, 125 + dy, 280 + dx, 300 + dy), (65, 165, 85))
         ellipse((225 + dx, 100 + dy, 375 + dx, 285 + dy), (50, 145, 75))
         ellipse((175 + dx, 180 + dy, 340 + dx, 330 + dy), (75, 180, 90))
 
     elif kind == "house":
-        draw.rectangle((135 + dx, 220 + dy, 375 + dx, 405 + dy), fill=(240, 205, 145), outline=line_color, width=7)
+        draw.rectangle(
+            (135 + dx, 220 + dy, 375 + dx, 405 + dy),
+            fill=(240, 205, 145),
+            outline=line_color,
+            width=7,
+        )
         polygon(
-            [(110 + dx, 225 + dy), (255 + dx, 100 + dy), (400 + dx, 225 + dy)],
+            [
+                (110 + dx, 225 + dy),
+                (255 + dx, 100 + dy),
+                (400 + dx, 225 + dy),
+            ],
             (190, 70, 60),
         )
-        draw.rectangle((225 + dx, 305 + dy, 290 + dx, 405 + dy), fill=(120, 80, 50), outline=line_color, width=5)
-        draw.rectangle((155 + dx, 260 + dy, 205 + dx, 310 + dy), fill=(130, 210, 240), outline=line_color, width=4)
-        draw.rectangle((310 + dx, 260 + dy, 355 + dx, 310 + dy), fill=(130, 210, 240), outline=line_color, width=4)
+        draw.rectangle(
+            (225 + dx, 305 + dy, 290 + dx, 405 + dy),
+            fill=(120, 80, 50),
+            outline=line_color,
+            width=5,
+        )
+        draw.rectangle(
+            (155 + dx, 260 + dy, 205 + dx, 310 + dy),
+            fill=(130, 210, 240),
+            outline=line_color,
+            width=4,
+        )
+        draw.rectangle(
+            (310 + dx, 260 + dy, 355 + dx, 310 + dy),
+            fill=(130, 210, 240),
+            outline=line_color,
+            width=4,
+        )
 
     elif kind == "fish":
         ellipse((120 + dx, 180 + dy, 365 + dx, 335 + dy), (90, 180, 225))
         polygon(
-            [(360 + dx, 255 + dy), (425 + dx, 195 + dy), (425 + dx, 315 + dy)],
+            [
+                (360 + dx, 255 + dy),
+                (425 + dx, 195 + dy),
+                (425 + dx, 315 + dy),
+            ],
             (245, 165, 70),
         )
-        ellipse((165 + dx, 220 + dy, 195 + dx, 250 + dy), (30, 30, 30), width=2)
-        line([(220 + dx, 205 + dy), (250 + dx, 255 + dy), (220 + dx, 305 + dy)], (50, 135, 185), 6)
+        ellipse(
+            (165 + dx, 220 + dy, 195 + dx, 250 + dy),
+            (30, 30, 30),
+            width=2,
+        )
+        line(
+            [
+                (220 + dx, 205 + dy),
+                (250 + dx, 255 + dy),
+                (220 + dx, 305 + dy),
+            ],
+            (50, 135, 185),
+            6,
+        )
 
-    # نقاط زخرفية عشوائية تعطي كل صورة اختلافًا.
     for _ in range(12):
         px = random.randint(40, 470)
         py = random.randint(40, 470)
         radius = random.randint(2, 5)
+
         draw.ellipse(
             (px, py, px + radius * 2, py + radius * 2),
             fill=accent,
         )
+
+    # تبكسل الرسمة ثم إعادتها إلى حجم مناسب للإرسال.
+    if ImageFilter is not None:
+        small_size = random.choice([48, 56, 64, 72])
+        image = image.resize(
+            (small_size, small_size),
+            Image.Resampling.BILINEAR,
+        )
+        image = image.resize(
+            (size, size),
+            Image.Resampling.NEAREST,
+        )
+
+        if random.random() < 0.5:
+            image = image.filter(ImageFilter.GaussianBlur(radius=1.2))
 
     output = io.BytesIO()
     image.save(output, format="PNG")
     output.seek(0)
 
     return discord.File(output, filename="game_drawing.png")
+
 
 # ============================================================
 # JOIN VIEW
@@ -432,6 +681,7 @@ def make_drawing_file(kind):
 class JoinButton(discord.ui.Button):
     def __init__(self, view):
         self.join_view = view
+
         super().__init__(
             label="انضمام",
             emoji="🎮",
@@ -465,13 +715,17 @@ class JoinButton(discord.ui.Button):
         if len(view.players) >= view.maximum:
             view.stop()
 
+
 class JoinView(discord.ui.View):
     def __init__(self, minimum=2, maximum=20, timeout=30):
         super().__init__(timeout=timeout)
+
         self.minimum = minimum
         self.maximum = maximum
         self.players = {}
+
         self.add_item(JoinButton(self))
+
 
 # ============================================================
 # FAST CLICK VIEW
@@ -480,6 +734,7 @@ class JoinView(discord.ui.View):
 class FastClickView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=FAST_GAME_TIME)
+
         self.winner = None
 
         button = discord.ui.Button(
@@ -487,6 +742,7 @@ class FastClickView(discord.ui.View):
             emoji="⚡",
             style=discord.ButtonStyle.success,
         )
+
         button.callback = self._clicked
         self.add_item(button)
 
@@ -505,6 +761,7 @@ class FastClickView(discord.ui.View):
             "أنت أول من ضغط!",
             ephemeral=True,
         )
+
 
 # ============================================================
 # WHEEL GAME VIEWS
@@ -551,6 +808,7 @@ class WheelActionSelect(discord.ui.Select):
 
         if view.round_number < ready_round:
             remaining = ready_round - view.round_number
+
             await interaction.response.send_message(
                 f"⏳ هذا الخيار في فترة انتظار. "
                 f"يمكنك استخدامه بعد {remaining} جولة.",
@@ -572,6 +830,7 @@ class WheelActionSelect(discord.ui.Select):
 
         if action == "random":
             target = random.choice(candidates)
+
             view.chosen_action = "random"
             view.target = target
 
@@ -582,6 +841,7 @@ class WheelActionSelect(discord.ui.Select):
                 f"🎲 تم اختيار {target.display_name} للإقصاء.",
                 ephemeral=True,
             )
+
             view.stop()
             return
 
@@ -603,6 +863,7 @@ class WheelActionSelect(discord.ui.Select):
                 view.target = target_view.target
                 view.stop()
 
+
 class WheelActionView(discord.ui.View):
     def __init__(
         self,
@@ -622,6 +883,7 @@ class WheelActionView(discord.ui.View):
         self.target = None
 
         self.add_item(WheelActionSelect(self))
+
 
 class WheelTargetSelect(discord.ui.Select):
     def __init__(self, wheel_view, candidates, page=0):
@@ -659,6 +921,7 @@ class WheelTargetSelect(discord.ui.Select):
             return
 
         target_id = int(self.values[0])
+
         target = next(
             (player for player in view.players if player.id == target_id),
             None,
@@ -672,15 +935,19 @@ class WheelTargetSelect(discord.ui.Select):
             return
 
         self.view.target = target
+
         await interaction.response.send_message(
             f"✅ اخترت {target.display_name}.",
             ephemeral=True,
         )
+
         self.view.stop()
+
 
 class WheelTargetView(discord.ui.View):
     def __init__(self, wheel_view, candidates):
         super().__init__(timeout=45)
+
         self.target = None
         self.wheel_view = wheel_view
         self.candidates = candidates
@@ -691,6 +958,7 @@ class WheelTargetView(discord.ui.View):
 
     def _refresh_items(self):
         self.clear_items()
+
         self.add_item(
             WheelTargetSelect(
                 self.wheel_view,
@@ -705,6 +973,7 @@ class WheelTargetView(discord.ui.View):
                 style=discord.ButtonStyle.secondary,
                 disabled=self.page == 0,
             )
+
             next_button = discord.ui.Button(
                 label="التالي",
                 style=discord.ButtonStyle.secondary,
@@ -721,6 +990,7 @@ class WheelTargetView(discord.ui.View):
 
                 self.page -= 1
                 self._refresh_items()
+
                 await interaction.response.edit_message(view=self)
 
             async def next_callback(interaction: discord.Interaction):
@@ -733,6 +1003,7 @@ class WheelTargetView(discord.ui.View):
 
                 self.page += 1
                 self._refresh_items()
+
                 await interaction.response.edit_message(view=self)
 
             previous_button.callback = previous_callback
@@ -740,6 +1011,7 @@ class WheelTargetView(discord.ui.View):
 
             self.add_item(previous_button)
             self.add_item(next_button)
+
 
 # ============================================================
 # GAME SYSTEM
@@ -753,6 +1025,7 @@ class GameSystem:
         self.points = {}
         self.log_cooldowns = {}
         self.used_items = {}
+
         self.listener_added = False
         self.commands_added = False
         self.slash_added = False
@@ -763,10 +1036,13 @@ class GameSystem:
 
     def pick_nonrepeating(self, channel, key, items):
         """يمنع تكرار العنصر في الروم حتى تُستخدم جميع العناصر."""
-        pool_key = (getattr(channel, "guild", None).id if getattr(channel, "guild", None) else 0,
-                    channel.id, key)
+        guild = getattr(channel, "guild", None)
+        guild_id = guild.id if guild else 0
+
+        pool_key = (guild_id, channel.id, key)
 
         used = self.used_items.setdefault(pool_key, set())
+
         available = [
             item for item in items
             if self._item_key(item) not in used
@@ -778,14 +1054,17 @@ class GameSystem:
 
         selected = random.choice(available)
         used.add(self._item_key(selected))
+
         return selected
 
     @staticmethod
     def _item_key(item):
         if isinstance(item, dict):
             return str(item.get("answer", item))
+
         if isinstance(item, tuple):
             return str(item[0])
+
         return str(item)
 
     # ========================================================
@@ -794,6 +1073,7 @@ class GameSystem:
 
     async def setup(self):
         if self.bot.get_command("العاب") is None:
+
             async def games_callback(ctx: commands.Context):
                 await self.games_command(ctx)
 
@@ -806,6 +1086,7 @@ class GameSystem:
             )
 
         if self.bot.get_command("حدد_امر") is None:
+
             async def setup_callback(
                 ctx: commands.Context,
                 slot: int = None,
@@ -823,6 +1104,7 @@ class GameSystem:
             )
 
         if self.bot.get_command("stop") is None:
+
             async def stop_callback(ctx: commands.Context):
                 await self.stop_command(ctx)
 
@@ -838,12 +1120,15 @@ class GameSystem:
             if self.bot.get_command(command_name) is not None:
                 continue
 
-            async def game_callback(ctx: commands.Context, key=game_key):
-                await self.command_start_game(ctx, key)
+            def make_game_callback(key):
+                async def game_callback(ctx: commands.Context):
+                    await self.command_start_game(ctx, key)
+
+                return game_callback
 
             self.bot.add_command(
                 commands.Command(
-                    game_callback,
+                    make_game_callback(game_key),
                     name=command_name,
                     help=f"تشغيل لعبة {title}",
                 )
@@ -938,6 +1223,7 @@ class GameSystem:
 
             for row in rows:
                 slot = int(row["slot"])
+
                 setups[slot] = {
                     "channel_id": int(row["channel_id"]),
                     "role_id": int(row["role_id"]),
@@ -947,6 +1233,7 @@ class GameSystem:
             traceback.print_exc()
 
         self.guild_setups[guild_id] = setups
+
         return setups
 
     # ========================================================
@@ -1013,7 +1300,12 @@ class GameSystem:
     # ========================================================
 
     async def log_denied_attempt(
-        self, guild, channel, member, game_key, reason
+        self,
+        guild,
+        channel,
+        member,
+        game_key,
+        reason,
     ):
         if not EXPLOIT_LOGGING_ENABLED:
             return
@@ -1136,6 +1428,7 @@ class GameSystem:
         }
 
         self.active_games[ctx.channel.id] = state
+
         task = asyncio.create_task(self._run_game(ctx, game_key))
         state["task"] = task
 
@@ -1200,6 +1493,7 @@ class GameSystem:
             lines.append(f"{emoji} `{PREFIX}{command_name}` — {title}")
 
         lines.extend(["", f"لإيقاف اللعبة الحالية: `{PREFIX}stop`"])
+
         await ctx.send("\n".join(lines))
 
     # ========================================================
@@ -1321,6 +1615,7 @@ class GameSystem:
             )
         except Exception:
             traceback.print_exc()
+
             await interaction.response.send_message(
                 "❌ تعذر حفظ روم السجلات.",
                 ephemeral=True,
@@ -1418,7 +1713,12 @@ class GameSystem:
 
         state = self.active_games.get(message.channel.id)
 
-        if not state or state.get("ended").is_set():
+        if not state:
+            return
+
+        ended = state.get("ended")
+
+        if ended is None or ended.is_set():
             return
 
         answer = state.get("answer")
@@ -1432,7 +1732,7 @@ class GameSystem:
             state.get("aliases"),
         ):
             state["winner"] = message.author
-            state["ended"].set()
+            ended.set()
 
     # ========================================================
     # ANSWER ROUND HELPER
@@ -1515,7 +1815,11 @@ class GameSystem:
             traceback.print_exc()
 
         try:
-            game_key = self.active_games.get(channel.id, {}).get("game", "unknown")
+            game_key = self.active_games.get(channel.id, {}).get(
+                "game",
+                "unknown",
+            )
+
             self.bot.database.add_game_history(
                 guild.id,
                 channel.id,
@@ -1583,8 +1887,10 @@ class GameSystem:
 
         while len(players) > 1:
             await asyncio.sleep(2)
+
             eliminated = random.choice(players)
             players.remove(eliminated)
+
             await channel.send(f"🎯 خرج {eliminated.mention} من الجولة!")
 
         await self.winner(channel, players[0])
@@ -1662,7 +1968,7 @@ class GameSystem:
             "ابقَ حتى تكون آخر لاعب.",
             3,
             20,
-            30,
+            MUSICAL_CHAIRS_TIME,
         )
 
         if not players:
@@ -1671,11 +1977,14 @@ class GameSystem:
         while len(players) > 1:
             await channel.send("🎵 الموسيقى شغالة...")
             await asyncio.sleep(2)
+
             eliminated = random.choice(players)
             players.remove(eliminated)
+
             await channel.send(
                 f"🪑 توقفت الموسيقى! خرج {eliminated.mention}."
             )
+
             await asyncio.sleep(1)
 
         await self.winner(channel, players[0])
@@ -1698,6 +2007,7 @@ class GameSystem:
             return
 
         choices = {}
+
         allowed = {
             "حجر": "rock",
             "ورق": "paper",
@@ -1706,6 +2016,8 @@ class GameSystem:
             "paper": "paper",
             "scissors": "scissors",
         }
+
+        normalized_choices = {normalize(key) for key in allowed}
 
         await channel.send(
             "اكتبوا اختياركم برسالة:\n`حجر` أو `ورق` أو `مقص`."
@@ -1716,9 +2028,7 @@ class GameSystem:
                 return (
                     message.author.id == player.id
                     and message.channel.id == channel.id
-                    and normalize(message.content) in {
-                        normalize(k) for k in allowed
-                    }
+                    and normalize(message.content) in normalized_choices
                 )
 
             message = await self.bot.wait_for(
@@ -1726,6 +2036,7 @@ class GameSystem:
                 timeout=FAST_GAME_TIME,
                 check=check,
             )
+
             choices[player.id] = allowed[normalize(message.content)]
 
         try:
@@ -1780,10 +2091,12 @@ class GameSystem:
             return
 
         board = ["⬜"] * 9
+
         symbols = {
             players[0].id: "❌",
             players[1].id: "⭕",
         }
+
         current_index = 0
         fire_cells = random.sample(range(9), 2) if fiery else []
 
@@ -1804,6 +2117,7 @@ class GameSystem:
                 else board[i]
                 for i in range(9)
             ]
+
             return (
                 f"{shown[0]} {shown[1]} {shown[2]}\n"
                 f"{shown[3]} {shown[4]} {shown[5]}\n"
@@ -1848,10 +2162,12 @@ class GameSystem:
 
             if fiery and index in fire_cells:
                 winner = players[1 - current_index]
+
                 await channel.send(
                     f"🔥 ضغط {player.mention} على خانة نارية وخسر!\n"
                     f"🏆 الفائز: {winner.mention}"
                 )
+
                 await self.winner(channel, winner)
                 return
 
@@ -1865,6 +2181,7 @@ class GameSystem:
                     await channel.send(
                         f"{render()}\n\n🏆 الفائز: {player.mention}"
                     )
+
                     await self.winner(channel, player)
                     return
 
@@ -1891,8 +2208,10 @@ class GameSystem:
             return
 
         seeker = random.choice(players)
+
         hidden = random.choice([
-            p for p in players if p.id != seeker.id
+            player for player in players
+            if player.id != seeker.id
         ])
 
         await channel.send(
@@ -1901,7 +2220,9 @@ class GameSystem:
         )
 
         await asyncio.sleep(HIDE_SEEK_TIME)
+
         await channel.send(f"🔎 كان المختبئ: {hidden.mention}")
+
         await self.winner(channel, seeker)
 
     # ========================================================
@@ -1909,14 +2230,11 @@ class GameSystem:
     # ========================================================
 
     async def game_replika(self, channel):
-        sentence = random.choice([
-            "انا احب البرمجة",
-            "اليوم الجو جميل",
-            "البوت سريع جدا",
-            "الالعاب ممتعة",
-            "هذا اختبار سرعة",
-            "ديسكورد رائع",
-        ])
+        sentence = self.pick_nonrepeating(
+            channel,
+            "replika",
+            REPLIKA_SENTENCES,
+        )
 
         await self.text_round(
             channel,
@@ -1933,7 +2251,7 @@ class GameSystem:
     async def game_guess_country(self, channel):
         country, aliases, code, clue = self.pick_nonrepeating(
             channel,
-            "country",
+            "flag_country",
             FLAGS,
         )
 
@@ -1961,6 +2279,7 @@ class GameSystem:
             image_file = make_drawing_file(item["kind"])
         except Exception:
             traceback.print_exc()
+
             await channel.send(
                 "❌ تعذر إنشاء الرسمة. تأكد من تثبيت Pillow في requirements.txt."
             )
@@ -1982,7 +2301,12 @@ class GameSystem:
     # ========================================================
 
     async def game_guess_word(self, channel):
-        word, aliases = random.choice(WORDS)
+        word, aliases = self.pick_nonrepeating(
+            channel,
+            "word",
+            WORDS,
+        )
+
         masked = " ".join(
             "⬜" if not char.isspace() else " "
             for char in word
@@ -2003,6 +2327,7 @@ class GameSystem:
 
     async def game_fast_click(self, channel):
         await channel.send("⚡ استعد...")
+
         await asyncio.sleep(random.uniform(2, 5))
 
         view = FastClickView()
@@ -2027,16 +2352,11 @@ class GameSystem:
     # ========================================================
 
     async def game_fast_type(self, channel):
-        text = random.choice([
-            "سرعة",
-            "ديسكورد",
-            "العاب",
-            "برمجة",
-            "بوت",
-            "مسابقة",
-            "تحدي",
-            "سرعة الكتابة",
-        ])
+        text = self.pick_nonrepeating(
+            channel,
+            "fast_type",
+            FAST_TYPE_WORDS,
+        )
 
         await self.text_round(
             channel,
@@ -2051,14 +2371,12 @@ class GameSystem:
     # ========================================================
 
     async def game_text_split(self, channel):
-        word = random.choice([
-            "ديسكورد",
-            "برمجة",
-            "مسابقة",
-            "روبوت",
-            "العاب",
-            "تحدي",
-        ])
+        word = self.pick_nonrepeating(
+            channel,
+            "text_split",
+            TEXT_SPLIT_WORDS,
+        )
+
         answer = " ".join(word)
 
         await self.text_round(
@@ -2074,13 +2392,12 @@ class GameSystem:
     # ========================================================
 
     async def game_merge_text(self, channel):
-        word = random.choice([
-            "د ي س ك و ر د",
-            "ب ر م ج ة",
-            "م س ا ب ق ة",
-            "ا ل ع ا ب",
-            "ت ح د ي",
-        ])
+        word = self.pick_nonrepeating(
+            channel,
+            "merge_text",
+            MERGE_TEXT_WORDS,
+        )
+
         answer = word.replace(" ", "")
 
         await self.text_round(
@@ -2098,7 +2415,7 @@ class GameSystem:
     async def game_guess_flag(self, channel):
         country, aliases, code, clue = self.pick_nonrepeating(
             channel,
-            "flag",
+            "flag_country",
             FLAGS,
         )
 
@@ -2117,14 +2434,11 @@ class GameSystem:
     # ========================================================
 
     async def game_text_reverse(self, channel):
-        word = random.choice([
-            "ديسكورد",
-            "العاب",
-            "مسابقة",
-            "برمجة",
-            "بوت",
-            "تحدي",
-        ])
+        word = self.pick_nonrepeating(
+            channel,
+            "text_reverse",
+            TEXT_REVERSE_WORDS,
+        )
 
         await self.text_round(
             channel,
@@ -2139,13 +2453,18 @@ class GameSystem:
     # ========================================================
 
     async def game_find_letter(self, channel):
-        letters = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
-        target = random.choice(letters)
-        other_letters = [x for x in letters if x != target]
+        target = random.choice(ARABIC_LETTERS)
+
+        other_letters = [
+            letter for letter in ARABIC_LETTERS
+            if letter != target
+        ]
+
         sequence = [
             random.choice(other_letters)
             for _ in range(49)
         ]
+
         sequence.insert(random.randint(0, 49), target)
 
         await self.text_round(
@@ -2162,11 +2481,13 @@ class GameSystem:
     # ========================================================
 
     async def game_correct_letter(self, channel):
-        letters = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
-        target = random.choice(letters)
+        target = random.choice(ARABIC_LETTERS)
+
         fake = random.choice([
-            x for x in letters if x != target
+            letter for letter in ARABIC_LETTERS
+            if letter != target
         ])
+
         sequence = [fake for _ in range(30)]
         correct_index = random.randrange(30)
         sequence[correct_index] = target
@@ -2188,14 +2509,16 @@ class GameSystem:
     async def game_sort_numbers(self, channel):
         numbers = random.sample(range(1, 50), 6)
         scrambled = numbers[:]
+
         random.shuffle(scrambled)
-        answer = " ".join(str(n) for n in sorted(numbers))
+
+        answer = " ".join(str(number) for number in sorted(numbers))
 
         await self.text_round(
             channel,
             "🔢 ترتيب الأرقام",
             "رتب الأرقام من الأصغر إلى الأكبر:\n\n"
-            + " — ".join(str(n) for n in scrambled)
+            + " — ".join(str(number) for number in scrambled)
             + "\n\nمثال: `1 2 3 4 5 6`",
             answer,
             timeout=TEXT_GAME_TIME,
@@ -2206,7 +2529,11 @@ class GameSystem:
     # ========================================================
 
     async def game_guess_color(self, channel):
-        name, aliases, emoji = random.choice(COLORS)
+        name, aliases, emoji = self.pick_nonrepeating(
+            channel,
+            "color",
+            COLORS,
+        )
 
         await self.text_round(
             channel,
@@ -2222,17 +2549,22 @@ class GameSystem:
     # ========================================================
 
     async def game_find_emoji(self, channel):
-        emojis = [
-            "😀", "😂", "😎", "🤖", "🐱",
-            "🐶", "🍎", "🍕", "⚽", "🔥",
+        target = self.pick_nonrepeating(
+            channel,
+            "find_emoji",
+            FIND_EMOJIS,
+        )
+
+        others = [
+            emoji for emoji in FIND_EMOJIS
+            if emoji != target
         ]
 
-        target = random.choice(emojis)
-        others = [x for x in emojis if x != target]
         sequence = [
             random.choice(others)
             for _ in range(49)
         ]
+
         sequence.insert(random.randint(0, 49), target)
 
         await self.text_round(
@@ -2249,7 +2581,12 @@ class GameSystem:
     # ========================================================
 
     async def game_text_reveal(self, channel):
-        word, aliases = random.choice(WORDS)
+        word, aliases = self.pick_nonrepeating(
+            channel,
+            "word",
+            WORDS,
+        )
+
         visible = set()
         state = self.active_games.get(channel.id)
 
@@ -2284,7 +2621,7 @@ class GameSystem:
 
         reveal_count = min(
             3,
-            len([c for c in word if not c.isspace()]),
+            len([char for char in word if not char.isspace()]),
         )
 
         for _ in range(reveal_count):
@@ -2301,8 +2638,9 @@ class GameSystem:
                 return
 
             available = [
-                i for i, char in enumerate(word)
-                if not char.isspace() and i not in visible
+                index
+                for index, char in enumerate(word)
+                if not char.isspace() and index not in visible
             ]
 
             if not available:
@@ -2357,7 +2695,6 @@ class GameSystem:
         if len(players) < 4:
             return
 
-        # إذا تجاوز العدد خمسة، يحصل لاعب عشوائي على حصانة سرية.
         immune_player = random.choice(players) if len(players) > 5 else None
         immunity_used = False
 
@@ -2371,7 +2708,6 @@ class GameSystem:
             except discord.HTTPException:
                 pass
 
-        # كل خيار له فترة انتظار مستقلة للجولات التالية.
         action_ready_round = {}
         round_number = 1
 
@@ -2386,6 +2722,7 @@ class GameSystem:
 
         while len(players) > 1:
             state = self.active_games.get(channel.id)
+
             if not state:
                 return
 
@@ -2496,9 +2833,11 @@ class GameSystem:
                     discord.Color.green(),
                 )
             )
+
             await self.winner(channel, players[0])
         else:
             await channel.send("انتهت اللعبة دون وجود فائز.")
+
 
 # ============================================================
 # EXPORT
