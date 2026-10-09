@@ -1,105 +1,102 @@
 # ============================================================
 # GAME BOT - GAMES.PY
+# FULL VERSION - 23 GAMES
+# Python 3.14+ / discord.py 2.7+
 # ============================================================
-# 23 GAMES
-#
-# -العاب
-# -حدد_امر
-# /setupgames
-#
-# جميع الألعاب من منيو واحد.
-# لا توجد أوامر منفصلة للألعاب.
-#
-# إعداد الألعاب:
-# حتى 10 إعدادات
-# كل إعداد = روم + رتبة
-#
-# ============================================================
-
 import asyncio
 import random
 import re
 import time
-
+import traceback
 import discord
 from discord import app_commands
 from discord.ext import commands
-
-
+try:
+    import config as cfg
+except ImportError:
+    cfg = None
 # ============================================================
 # CONFIG
 # ============================================================
-
-try:
-    from config import (
-        PREFIX,
-        MAX_SETUP_SLOTS,
-        WIN_POINTS,
-        PARTICIPATION_POINTS,
-        GUESS_TIME,
-        FAST_GAME_TIME,
-        TEXT_GAME_TIME,
-        ELIMINATION_TIME,
-        MAFIA_TIME,
-        HIDE_SEEK_TIME,
-        MUSICAL_CHAIRS_TIME,
-        ROULETTE_TIME,
-    )
-except ImportError:
-    PREFIX = "-"
-    MAX_SETUP_SLOTS = 10
-    WIN_POINTS = 10
-    PARTICIPATION_POINTS = 2
-    GUESS_TIME = 30
-    FAST_GAME_TIME = 15
-    TEXT_GAME_TIME = 30
-    ELIMINATION_TIME = 30
-    MAFIA_TIME = 30
-    HIDE_SEEK_TIME = 30
-    MUSICAL_CHAIRS_TIME = 30
-    ROULETTE_TIME = 20
-
-
+PREFIX = getattr(cfg, "PREFIX", "-")
+MAX_SETUP_SLOTS = getattr(cfg, "MAX_SETUP_SLOTS", 10)
+WIN_POINTS = getattr(cfg, "WIN_POINTS", 10)
+PARTICIPATION_POINTS = getattr(cfg, "PARTICIPATION_POINTS", 2)
+GUESS_TIME = getattr(cfg, "GUESS_TIME", 30)
+FAST_GAME_TIME = getattr(cfg, "FAST_GAME_TIME", 15)
+TEXT_GAME_TIME = getattr(cfg, "TEXT_GAME_TIME", 30)
+ELIMINATION_TIME = getattr(cfg, "ELIMINATION_TIME", 30)
+MAFIA_TIME = getattr(cfg, "MAFIA_TIME", 30)
+HIDE_SEEK_TIME = getattr(cfg, "HIDE_SEEK_TIME", 30)
+MUSICAL_CHAIRS_TIME = getattr(cfg, "MUSICAL_CHAIRS_TIME", 30)
+ROULETTE_TIME = getattr(cfg, "ROULETTE_TIME", 20)
+EXPLOIT_LOG_CHANNEL_ID = getattr(
+    cfg, "EXPLOIT_LOG_CHANNEL_ID", None
+)
+EXPLOIT_LOG_COOLDOWN_SECONDS = getattr(
+    cfg, "EXPLOIT_LOG_COOLDOWN_SECONDS", 5
+)
+EXPLOIT_LOGGING_ENABLED = getattr(
+    cfg, "EXPLOIT_LOGGING_ENABLED", True
+)
+ADMIN_BYPASS_SETUP = getattr(
+    cfg, "ADMIN_BYPASS_SETUP", True
+)
 # ============================================================
-# GAMES
+# GAME COMMANDS
 # ============================================================
-
 GAMES = [
-    ("roulette", "🎯", "روليت"),
-    ("xo", "❌", "إكس أو"),
-    ("mafia", "🕵️", "مافيا"),
-    ("musical_chairs", "🪑", "الكراسي الموسيقية"),
-    ("rps", "🪨", "حجر ورق مقص"),
-    ("fiery_xo", "🔥", "إكس أو النارية"),
-    ("hide_seek", "👀", "الغميضة"),
-    ("replika", "🤖", "ريبلكا"),
-    ("guess_country", "🌍", "خمن الدولة"),
-    ("guess_drawing", "🎨", "خمن الرسمة"),
-    ("guess_word", "📝", "خمن الكلمة"),
-    ("fast_click", "⚡", "الضغط السريع"),
-    ("fast_type", "⌨️", "الكتابة السريعة"),
-    ("text_split", "✂️", "فصل النص"),
-    ("merge_text", "🔗", "دمج النص"),
-    ("guess_flag", "🏳️", "خمن العلم"),
-    ("text_reverse", "🔄", "عكس النص"),
-    ("find_letter", "🔤", "ابحث عن الحرف"),
-    ("correct_letter", "✅", "الحرف الصحيح"),
-    ("sort_numbers", "🔢", "ترتيب الأرقام"),
-    ("guess_color", "🎨", "خمن اللون"),
-    ("find_emoji", "🔎", "ابحث عن الإيموجي"),
-    ("text_reveal", "👁️", "كشف النص"),
+    ("roulette", "🎯", "روليت", "روليت"),
+    ("xo", "❌", "إكس أو", "XO"),
+    ("mafia", "🕵️", "مافيا", "مافيا"),
+    ("musical_chairs", "🪑", "الكراسي الموسيقية", "الكراسي_الموسيقية"),
+    ("rps", "🪨", "حجر ورق مقص", "حجر_ورق_مقص"),
+    ("fiery_xo", "🔥", "إكس أو النارية", "اكس_او_النارية"),
+    ("hide_seek", "👀", "الغميضة", "الغميضة"),
+    ("replika", "🤖", "ريبلكا", "ريبلكا"),
+    ("guess_country", "🌍", "خمن الدولة", "خمن_الدولة"),
+    ("guess_drawing", "🎨", "خمن الرسمة", "خمن_الرسمة"),
+    ("guess_word", "📝", "خمن الكلمة", "خمن_الكلمة"),
+    ("fast_click", "⚡", "الضغط السريع", "الضغط_السريع"),
+    ("fast_type", "⌨️", "الكتابة السريعة", "الكتابة_السريعة"),
+    ("text_split", "✂️", "فصل النص", "فصل_النص"),
+    ("merge_text", "🔗", "دمج النص", "دمج_النص"),
+    ("guess_flag", "🏳️", "خمن العلم", "خمن_العلم"),
+    ("text_reverse", "🔄", "عكس النص", "عكس_النص"),
+    ("find_letter", "🔤", "ابحث عن الحرف", "ابحث_عن_الحرف"),
+    ("correct_letter", "✅", "الحرف الصحيح", "الحرف_الصحيح"),
+    ("sort_numbers", "🔢", "ترتيب الأرقام", "ترتيب_الارقام"),
+    ("guess_color", "🎨", "خمن اللون", "خمن_اللون"),
+    ("find_emoji", "🔎", "ابحث عن الإيموجي", "ابحث_عن_الايموجي"),
+    ("text_reveal", "👁️", "كشف النص", "كشف_النص"),
 ]
-
-GAME_NAMES = {
-    key: name
-    for key, emoji, name in GAMES
-}
-
-
+GAME_NAMES = {key: name for key, emoji, name, command in GAMES}
+GAME_COMMANDS = {key: command for key, emoji, name, command in GAMES}
 # ============================================================
-# DRAWINGS
+# GAME DATA
 # ============================================================
-
+WORDS = [
+    ("سيارة", ["سياره", "car"]),
+    ("مدرسة", ["مدرسه", "school"]),
+    ("مستشفى", ["hospital"]),
+    ("كمبيوتر", ["حاسوب", "computer"]),
+    ("جوال", ["هاتف", "phone"]),
+    ("طائرة", ["طياره", "airplane", "plane"]),
+    ("كرة", ["كره", "ball"]),
+    ("كتاب", ["book"]),
+    ("قلم", ["pen"]),
+    ("بحر", ["sea"]),
+    ("جبل", ["mountain"]),
+    ("شجرة", ["شجره", "tree"]),
+    ("نخلة", ["نخله", "palm"]),
+    ("بيت", ["house"]),
+    ("باب", ["door"]),
+    ("نافذة", ["نافذه", "window"]),
+    ("ساعة", ["ساعه", "clock"]),
+    ("دراجة", ["دراجه", "bike"]),
+    ("مفتاح", ["key"]),
+    ("هاتف", ["جوال", "phone"]),
+]
 DRAWINGS = [
     {
         "answer": "تفاحة",
@@ -147,2343 +144,1203 @@ DRAWINGS = [
         "image": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=900&q=80",
     },
 ]
-
-
-# ============================================================
-# FLAGS
-# ============================================================
-
 FLAGS = [
-    {"country": "السعودية", "aliases": ["السعوديه", "saudi", "saudi arabia"], "code": "sa"},
-    {"country": "الإمارات", "aliases": ["الامارات", "uae", "emirates"], "code": "ae"},
-    {"country": "الكويت", "aliases": ["kuwait"], "code": "kw"},
-    {"country": "قطر", "aliases": ["qatar"], "code": "qa"},
-    {"country": "البحرين", "aliases": ["bahrain"], "code": "bh"},
-    {"country": "عمان", "aliases": ["سلطنة عمان", "oman"], "code": "om"},
-    {"country": "مصر", "aliases": ["egypt"], "code": "eg"},
-    {"country": "العراق", "aliases": ["iraq"], "code": "iq"},
-    {"country": "الأردن", "aliases": ["الاردن", "jordan"], "code": "jo"},
-    {"country": "المغرب", "aliases": ["morocco"], "code": "ma"},
-    {"country": "الجزائر", "aliases": ["algeria"], "code": "dz"},
-    {"country": "تونس", "aliases": ["tunisia"], "code": "tn"},
-    {"country": "تركيا", "aliases": ["turkey", "turkiye"], "code": "tr"},
-    {"country": "فرنسا", "aliases": ["france"], "code": "fr"},
-    {"country": "ألمانيا", "aliases": ["المانيا", "germany"], "code": "de"},
-    {"country": "إيطاليا", "aliases": ["italy"], "code": "it"},
-    {"country": "إسبانيا", "aliases": ["اسبانيا", "spain"], "code": "es"},
-    {"country": "اليابان", "aliases": ["japan"], "code": "jp"},
-    {"country": "الصين", "aliases": ["china"], "code": "cn"},
-    {"country": "الهند", "aliases": ["india"], "code": "in"},
-    {"country": "البرازيل", "aliases": ["brazil"], "code": "br"},
-    {"country": "الأرجنتين", "aliases": ["argentina"], "code": "ar"},
-    {"country": "كندا", "aliases": ["canada"], "code": "ca"},
-    {
-        "country": "أمريكا",
-        "aliases": ["امريكا", "usa", "united states"],
-        "code": "us",
-    },
-    {
-        "country": "بريطانيا",
-        "aliases": ["بريطانيا", "انجلترا", "uk", "england"],
-        "code": "gb",
-    },
+    ("السعودية", ["السعوديه", "saudi", "saudi arabia"], "sa", "تقع في شبه الجزيرة العربية."),
+    ("الإمارات", ["الامارات", "uae", "emirates"], "ae", "عاصمتها أبوظبي."),
+    ("الكويت", ["kuwait"], "kw", "دولة خليجية."),
+    ("قطر", ["qatar"], "qa", "استضافت كأس العالم 2022."),
+    ("البحرين", ["bahrain"], "bh", "دولة جزيرية خليجية."),
+    ("عمان", ["سلطنة عمان", "oman"], "om", "تقع جنوب شرق شبه الجزيرة العربية."),
+    ("مصر", ["egypt"], "eg", "يمر بها نهر النيل."),
+    ("العراق", ["iraq"], "iq", "يمر بها نهرا دجلة والفرات."),
+    ("الأردن", ["الاردن", "jordan"], "jo", "عاصمتها عمّان."),
+    ("المغرب", ["morocco"], "ma", "تقع في شمال غرب أفريقيا."),
+    ("الجزائر", ["algeria"], "dz", "أكبر دول أفريقيا مساحة."),
+    ("تونس", ["tunisia"], "tn", "دولة في شمال أفريقيا."),
+    ("تركيا", ["turkey", "turkiye"], "tr", "تقع بين آسيا وأوروبا."),
+    ("فرنسا", ["france"], "fr", "عاصمتها باريس."),
+    ("ألمانيا", ["المانيا", "germany"], "de", "عاصمتها برلين."),
+    ("إيطاليا", ["italy"], "it", "تشتهر بشكل شبه الجزيرة."),
+    ("إسبانيا", ["اسبانيا", "spain"], "es", "تقع في شبه الجزيرة الإيبيرية."),
+    ("اليابان", ["japan"], "jp", "دولة جزرية في شرق آسيا."),
+    ("الصين", ["china"], "cn", "دولة كبيرة في شرق آسيا."),
+    ("الهند", ["india"], "in", "تقع في جنوب آسيا."),
+    ("البرازيل", ["brazil"], "br", "أكبر دولة في أمريكا الجنوبية."),
+    ("الأرجنتين", ["argentina"], "ar", "تقع في جنوب أمريكا الجنوبية."),
+    ("كندا", ["canada"], "ca", "تقع شمال الولايات المتحدة."),
+    ("أمريكا", ["امريكا", "usa", "united states"], "us", "عاصمتها واشنطن."),
+    ("بريطانيا", ["انجلترا", "uk", "england"], "gb", "دولة جزرية أوروبية."),
 ]
-
-
-# ============================================================
-# WORDS
-# ============================================================
-
-WORDS = [
-    ("سيارة", ["سياره", "car"]),
-    ("مدرسة", ["مدرسه", "school"]),
-    ("مستشفى", ["hospital"]),
-    ("كمبيوتر", ["حاسوب", "computer"]),
-    ("جوال", ["هاتف", "phone"]),
-    ("طائرة", ["طياره", "airplane", "plane"]),
-    ("كرة", ["كره", "ball"]),
-    ("كتاب", ["book"]),
-    ("قلم", ["pen"]),
-    ("بحر", ["sea"]),
-    ("جبل", ["mountain"]),
-    ("شجرة", ["شجره", "tree"]),
-    ("نخلة", ["نخله", "palm"]),
-    ("بيت", ["house"]),
-    ("باب", ["door"]),
-    ("نافذة", ["نافذه", "window"]),
-    ("ساعة", ["ساعه", "clock"]),
-    ("دراجة", ["دراجه", "bike"]),
-    ("مفتاح", ["key"]),
-    ("هاتف", ["جوال", "phone"]),
-]
-
-
-# ============================================================
-# COLORS
-# ============================================================
-
 COLORS = [
     ("أحمر", ["احمر"], "🟥"),
     ("أزرق", ["ازرق"], "🟦"),
     ("أخضر", ["اخضر"], "🟩"),
     ("أصفر", ["اصفر"], "🟨"),
-    ("برتقالي", ["برتقالي"], "🟧"),
-    ("بنفسجي", ["بنفسجي"], "🟪"),
-    ("وردي", ["وردي"], "🌸"),
+    ("برتقالي", [], "🟧"),
+    ("بنفسجي", [], "🟪"),
+    ("وردي", [], "🌸"),
     ("أسود", ["اسود"], "⬛"),
     ("أبيض", ["ابيض"], "⬜"),
-    ("بني", ["بني"], "🟫"),
+    ("بني", [], "🟫"),
 ]
-
-
 # ============================================================
-# TEXT NORMALIZATION
+# TEXT HELPERS
 # ============================================================
-
-def normalize(text: str) -> str:
+def normalize(text):
     if not text:
         return ""
-
-    text = text.lower().strip()
-
+    text = str(text).lower().strip()
     replacements = {
-        "أ": "ا",
-        "إ": "ا",
-        "آ": "ا",
-        "ٱ": "ا",
-        "ة": "ه",
-        "ى": "ي",
-        "ؤ": "و",
-        "ئ": "ي",
-        "ـ": "",
+        "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+        "ة": "ه", "ى": "ي", "ؤ": "و", "ئ": "ي", "ـ": "",
     }
-
     for old, new in replacements.items():
         text = text.replace(old, new)
-
-    text = re.sub(r"\s+", " ", text)
-
-    return text
-
-
+    return re.sub(r"\s+", " ", text)
 def matches_answer(message, answer, aliases=None):
-    message = normalize(message)
-
-    options = [answer]
-
-    if aliases:
-        options.extend(aliases)
-
-    return any(
-        normalize(option) == message
-        for option in options
-    )
-
-
-def mask_word(word):
-    return " ".join(
-        "⬜" if not char.isspace() else " "
-        for char in word
-    )
-
-
-def mask_reveal(word, revealed_indexes):
-    result = []
-
-    for index, char in enumerate(word):
-        if char.isspace():
-            result.append(" ")
-        elif index in revealed_indexes:
-            result.append(char)
-        else:
-            result.append("⬜")
-
-    return " ".join(result)
-
-
-def game_embed(
-    title,
-    description,
-    color=None,
-):
-    if color is None:
-        color = discord.Color.blurple()
-
+    target = normalize(message)
+    options = [answer] + list(aliases or [])
+    return any(normalize(option) == target for option in options)
+def embed(title, description, color=None):
     return discord.Embed(
         title=title,
         description=description,
-        color=color,
+        color=color or discord.Color.blurple(),
     )
-
-
 # ============================================================
-# GAMES MENU
+# JOIN VIEW
 # ============================================================
-
-class GamesSelect(discord.ui.Select):
-
-    def __init__(self, game_system):
-
-        self.game_system = game_system
-
-        options = [
-            discord.SelectOption(
-                label=name,
-                value=key,
-                emoji=emoji,
-            )
-            for key, emoji, name in GAMES
-        ]
-
-        super().__init__(
-            placeholder="🎮 اختر اللعبة...",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    async def callback(self, interaction):
-
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ هذا النظام داخل السيرفر فقط.",
-                ephemeral=True,
-            )
-            return
-
-        if not self.game_system.can_use_games(
-            interaction.guild.id,
-            interaction.channel.id,
-            interaction.user,
-        ):
-            await interaction.response.send_message(
-                "❌ ما عندك صلاحية تشغيل الألعاب في هذا الروم.",
-                ephemeral=True,
-            )
-            return
-
-        await interaction.response.defer()
-
-        await self.game_system.start_game(
-            interaction.channel,
-            interaction.user,
-            self.values[0],
-        )
-
-
-class GamesView(discord.ui.View):
-
-    def __init__(self, game_system):
-        super().__init__(timeout=180)
-        self.add_item(GamesSelect(game_system))
-
-
-# ============================================================
-# SETUP UI
-# ============================================================
-
-class SetupSlotSelect(discord.ui.Select):
-
-    def __init__(self, game_system):
-
-        self.game_system = game_system
-
-        options = []
-
-        for number in range(1, MAX_SETUP_SLOTS + 1):
-            options.append(
-                discord.SelectOption(
-                    label=f"الإعداد {number}",
-                    description=f"تحديد روم ورتبة للإعداد {number}",
-                    value=str(number),
-                )
-            )
-
-        super().__init__(
-            placeholder="⚙️ اختر رقم الإعداد...",
-            min_values=1,
-            max_values=1,
-            options=options,
-        )
-
-    async def callback(self, interaction):
-
-        slot = int(self.values[0])
-
-        await interaction.response.send_message(
-            f"⚙️ **الإعداد رقم {slot}**\n\n"
-            "📢 اختر روم الألعاب:",
-            view=SetupChannelView(
-                self.game_system,
-                slot,
-            ),
-            ephemeral=True,
-        )
-
-
-class SetupMainView(discord.ui.View):
-
-    def __init__(self, game_system):
-        super().__init__(timeout=180)
-        self.add_item(SetupSlotSelect(game_system))
-
-
-class SetupChannelSelect(discord.ui.ChannelSelect):
-
-    def __init__(self, game_system, slot):
-
-        self.game_system = game_system
-        self.slot = slot
-
-        super().__init__(
-            placeholder="📢 اختر روم الألعاب...",
-            channel_types=[discord.ChannelType.text],
-            min_values=1,
-            max_values=1,
-        )
-
-    async def callback(self, interaction):
-
-        channel = self.values[0]
-
-        await interaction.response.send_message(
-            f"✅ الروم: {channel.mention}\n\n"
-            "👤 الآن اختر رتبة الألعاب:",
-            view=SetupRoleView(
-                self.game_system,
-                self.slot,
-                channel.id,
-            ),
-            ephemeral=True,
-        )
-
-
-class SetupChannelView(discord.ui.View):
-
-    def __init__(self, game_system, slot):
-
-        super().__init__(timeout=180)
-
-        self.add_item(
-            SetupChannelSelect(
-                game_system,
-                slot,
-            )
-        )
-
-
-class SetupRoleSelect(discord.ui.RoleSelect):
-
-    def __init__(
-        self,
-        game_system,
-        slot,
-        channel_id,
-    ):
-
-        self.game_system = game_system
-        self.slot = slot
-        self.channel_id = channel_id
-
-        super().__init__(
-            placeholder="👤 اختر رتبة الألعاب...",
-            min_values=1,
-            max_values=1,
-        )
-
-    async def callback(self, interaction):
-
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ حدث خطأ.",
-                ephemeral=True,
-            )
-            return
-
-        role = self.values[0]
-
-        self.game_system.set_setup(
-            interaction.guild.id,
-            self.slot,
-            self.channel_id,
-            role.id,
-        )
-
-        await interaction.response.send_message(
-            f"✅ تم حفظ الإعداد **{self.slot}**.\n\n"
-            f"📢 الروم: <#{self.channel_id}>\n"
-            f"👤 الرتبة: {role.mention}\n\n"
-            f"يمكنك إعداد حتى **{MAX_SETUP_SLOTS}** إعدادات.",
-            ephemeral=True,
-        )
-
-
-class SetupRoleView(discord.ui.View):
-
-    def __init__(
-        self,
-        game_system,
-        slot,
-        channel_id,
-    ):
-
-        super().__init__(timeout=180)
-
-        self.add_item(
-            SetupRoleSelect(
-                game_system,
-                slot,
-                channel_id,
-            )
-        )
-
-
-# ============================================================
-# JOIN SYSTEM
-# ============================================================
-
 class JoinButton(discord.ui.Button):
-
-    def __init__(self, parent):
-
-        self.parent_view = parent
-
+    def __init__(self, view):
+        self.join_view = view
         super().__init__(
             label="انضمام",
             emoji="🎮",
             style=discord.ButtonStyle.success,
         )
-
     async def callback(self, interaction):
-
-        if interaction.user.id in self.parent_view.players:
+        view = self.join_view
+        if interaction.user.id in view.players:
             await interaction.response.send_message(
-                "⚠️ أنت منضم بالفعل.",
+                "أنت منضم بالفعل.",
                 ephemeral=True,
             )
             return
-
-        if len(self.parent_view.players) >= self.parent_view.maximum:
+        if len(view.players) >= view.maximum:
             await interaction.response.send_message(
-                "❌ اكتمل عدد اللاعبين.",
+                "اكتمل عدد اللاعبين.",
                 ephemeral=True,
             )
             return
-
-        self.parent_view.players[
-            interaction.user.id
-        ] = interaction.user
-
+        view.players[interaction.user.id] = interaction.user
         await interaction.response.send_message(
-            f"✅ انضممت للعبة.\n"
-            f"👥 اللاعبين: "
-            f"{len(self.parent_view.players)}/"
-            f"{self.parent_view.maximum}",
+            f"تم انضمامك. عدد اللاعبين: {len(view.players)}/{view.maximum}",
             ephemeral=True,
         )
-
-        if len(self.parent_view.players) >= self.parent_view.minimum:
-            self.parent_view.start_requested = True
-            self.parent_view.stop()
-
-
-class StartButton(discord.ui.Button):
-
-    def __init__(self, parent):
-
-        self.parent_view = parent
-
-        super().__init__(
-            label="بدء اللعبة",
-            emoji="▶️",
-            style=discord.ButtonStyle.primary,
-        )
-
-    async def callback(self, interaction):
-
-        if len(self.parent_view.players) < self.parent_view.minimum:
-            await interaction.response.send_message(
-                f"❌ تحتاج على الأقل "
-                f"{self.parent_view.minimum} لاعبين.",
-                ephemeral=True,
-            )
-            return
-
-        self.parent_view.start_requested = True
-        self.parent_view.stop()
-
-        await interaction.response.send_message(
-            "▶️ بدأت اللعبة!",
-            ephemeral=True,
-        )
-
-
+        if len(view.players) >= view.maximum:
+            view.stop()
 class JoinView(discord.ui.View):
-
-    def __init__(
-        self,
-        minimum=2,
-        maximum=20,
-        timeout=30,
-    ):
-
+    def __init__(self, minimum=2, maximum=20, timeout=30):
         super().__init__(timeout=timeout)
-
         self.minimum = minimum
         self.maximum = maximum
         self.players = {}
-        self.start_requested = False
-
         self.add_item(JoinButton(self))
-        self.add_item(StartButton(self))
-
-
 # ============================================================
-# RPS
+# FAST CLICK VIEW
 # ============================================================
-
-class RPSButton(discord.ui.Button):
-
-    def __init__(
-        self,
-        parent,
-        label,
-        emoji,
-        value,
-    ):
-
-        self.parent_view = parent
-        self.value = value
-
-        super().__init__(
-            label=label,
-            emoji=emoji,
-            style=discord.ButtonStyle.secondary,
-        )
-
-    async def callback(self, interaction):
-
-        if interaction.user.id in self.parent_view.choices:
-            await interaction.response.send_message(
-                "❌ اخترت مسبقًا.",
-                ephemeral=True,
-            )
-            return
-
-        if len(self.parent_view.choices) >= 2:
-            await interaction.response.send_message(
-                "❌ اكتمل عدد اللاعبين.",
-                ephemeral=True,
-            )
-            return
-
-        self.parent_view.choices[
-            interaction.user.id
-        ] = self.value
-
-        await interaction.response.send_message(
-            "✅ تم تسجيل اختيارك.",
-            ephemeral=True,
-        )
-
-        if len(self.parent_view.choices) >= 2:
-            self.parent_view.stop()
-
-
-class RPSView(discord.ui.View):
-
-    def __init__(self):
-
-        super().__init__(timeout=FAST_GAME_TIME)
-
-        self.choices = {}
-
-        self.add_item(
-            RPSButton(
-                self,
-                "حجر",
-                "🪨",
-                "rock",
-            )
-        )
-
-        self.add_item(
-            RPSButton(
-                self,
-                "ورق",
-                "📄",
-                "paper",
-            )
-        )
-
-        self.add_item(
-            RPSButton(
-                self,
-                "مقص",
-                "✂️",
-                "scissors",
-            )
-        )
-
-
-# ============================================================
-# FAST CLICK
-# ============================================================
-
-class FastClickButton(discord.ui.Button):
-
-    def __init__(self, parent):
-
-        self.parent_view = parent
-
-        super().__init__(
-            label="اضغط!",
-            emoji="⚡",
-            style=discord.ButtonStyle.danger,
-        )
-
-    async def callback(self, interaction):
-
-        if self.parent_view.winner:
-            return
-
-        self.parent_view.winner = interaction.user
-
-        await interaction.response.send_message(
-            "⚡ ضغطت أول واحد!",
-            ephemeral=True,
-        )
-
-        self.parent_view.stop()
-
-
 class FastClickView(discord.ui.View):
-
     def __init__(self):
-
-        super().__init__(timeout=10)
-
+        super().__init__(timeout=FAST_GAME_TIME)
         self.winner = None
-
-        self.add_item(
-            FastClickButton(self)
+        button = discord.ui.Button(
+            label="اضغط الآن!",
+            emoji="⚡",
+            style=discord.ButtonStyle.success,
         )
-
-
-# ============================================================
-# XO
-# ============================================================
-
-class XOButton(discord.ui.Button):
-
-    def __init__(self, game, index):
-
-        self.game = game
-        self.index = index
-
-        super().__init__(
-            label="⬜",
-            style=discord.ButtonStyle.secondary,
-            row=index // 3,
-        )
-
-    async def callback(self, interaction):
-
-        await self.game.play_move(
-            interaction,
-            self.index,
-        )
-
-
-class XOView(discord.ui.View):
-
-    def __init__(self, game):
-
-        super().__init__(timeout=120)
-
-        self.game = game
-
-        for index in range(9):
-            self.add_item(
-                XOButton(
-                    game,
-                    index,
-                )
-            )
-
-
-class XOGame:
-
-    def __init__(
-        self,
-        system,
-        channel,
-        player_x,
-        player_o,
-        fiery=False,
-    ):
-
-        self.system = system
-        self.channel = channel
-
-        self.player_x = player_x
-        self.player_o = player_o
-
-        self.fiery = fiery
-
-        self.board = [None] * 9
-
-        self.current = player_x
-
-        self.symbols = {
-            player_x.id: "❌",
-            player_o.id: "⭕",
-        }
-
-        self.fire_cells = set()
-
-        if fiery:
-            self.fire_cells = set(
-                random.sample(range(9), 2)
-            )
-
-        self.view = XOView(self)
-
-        self.message = None
-        self.finished = False
-
-    async def start(self):
-        await self.update_message()
-
-    async def play_move(self, interaction, index):
-
-        if self.finished:
+        button.callback = self._clicked
+        self.add_item(button)
+    async def _clicked(self, interaction):
+        if self.winner is not None:
             await interaction.response.send_message(
-                "❌ انتهت اللعبة.",
+                "سبقك لاعب آخر.",
                 ephemeral=True,
             )
             return
-
-        if interaction.user.id != self.current.id:
-            await interaction.response.send_message(
-                "⏳ انتظر دورك.",
-                ephemeral=True,
-            )
-            return
-
-        if self.board[index] is not None:
-            await interaction.response.send_message(
-                "❌ هذه الخانة مستخدمة.",
-                ephemeral=True,
-            )
-            return
-
-        if self.fiery and index in self.fire_cells:
-
-            self.finished = True
-
-            await interaction.response.defer()
-
-            for child in self.view.children:
-                child.disabled = True
-
-            winner = (
-                self.player_o
-                if self.current.id == self.player_x.id
-                else self.player_x
-            )
-
-            if self.message:
-                await self.message.edit(
-                    content=(
-                        "🔥 **إكس أو النارية**\n\n"
-                        f"💥 {interaction.user.mention} "
-                        "ضغط على الخانة النارية وخسر!\n\n"
-                        f"🏆 الفائز: {winner.mention}"
-                    ),
-                    view=self.view,
-                )
-
-            await self.system.winner(
-                self.channel,
-                winner,
-            )
-
-            self.system.active_games.pop(
-                self.channel.id,
-                None,
-            )
-
-            return
-
-        self.board[index] = self.symbols[
-            interaction.user.id
-        ]
-
-        await interaction.response.defer()
-
-        winner_symbol = self.check_winner()
-
-        if winner_symbol:
-
-            self.finished = True
-
-            for child in self.view.children:
-                child.disabled = True
-
-            winner = self.current
-
-            if self.message:
-                await self.message.edit(
-                    content=(
-                        f"🏆 الفائز: "
-                        f"{winner.mention}"
-                    ),
-                    view=self.view,
-                )
-
-            await self.system.winner(
-                self.channel,
-                winner,
-            )
-
-            self.system.active_games.pop(
-                self.channel.id,
-                None,
-            )
-
-            return
-
-        if all(
-            cell is not None
-            for cell in self.board
-        ):
-
-            self.finished = True
-
-            for child in self.view.children:
-                child.disabled = True
-
-            if self.message:
-                await self.message.edit(
-                    content="🤝 تعادل!",
-                    view=self.view,
-                )
-
-            self.system.active_games.pop(
-                self.channel.id,
-                None,
-            )
-
-            return
-
-        self.current = (
-            self.player_o
-            if self.current.id == self.player_x.id
-            else self.player_x
+        self.winner = interaction.user
+        self.stop()
+        await interaction.response.send_message(
+            "أنت أول من ضغط!",
+            ephemeral=True,
         )
-
-        await self.update_message()
-
-    async def update_message(self):
-
-        board = []
-
-        for index in range(9):
-
-            if self.board[index]:
-                value = self.board[index]
-
-            elif self.fiery and index in self.fire_cells:
-                value = "🔥"
-
-            else:
-                value = "⬜"
-
-            board.append(value)
-
-        title = (
-            "🔥 إكس أو النارية"
-            if self.fiery
-            else "❌⭕ إكس أو"
-        )
-
-        content = (
-            f"**{title}**\n\n"
-            f"{board[0]} {board[1]} {board[2]}\n"
-            f"{board[3]} {board[4]} {board[5]}\n"
-            f"{board[6]} {board[7]} {board[8]}\n\n"
-            f"الدور: {self.current.mention}"
-        )
-
-        if self.fiery:
-            content += "\n\n⚠️ انتبه: 🔥 = خانة نارية."
-
-        if self.message is None:
-            self.message = await self.channel.send(
-                content=content,
-                view=self.view,
-            )
-        else:
-            await self.message.edit(
-                content=content,
-                view=self.view,
-            )
-
-    def check_winner(self):
-
-        combinations = [
-            (0, 1, 2),
-            (3, 4, 5),
-            (6, 7, 8),
-            (0, 3, 6),
-            (1, 4, 7),
-            (2, 5, 8),
-            (0, 4, 8),
-            (2, 4, 6),
-        ]
-
-        for a, b, c in combinations:
-
-            if (
-                self.board[a]
-                and self.board[a]
-                == self.board[b]
-                == self.board[c]
-            ):
-                return self.board[a]
-
-        return None
-
-
 # ============================================================
 # GAME SYSTEM
 # ============================================================
-
 class GameSystem:
-
     def __init__(self, bot):
-
         self.bot = bot
-
+        # channel_id -> game state
         self.active_games = {}
-
         self.guild_setups = {}
-
         self.points = {}
-
+        self.log_cooldowns = {}
         self.listener_added = False
         self.commands_added = False
         self.slash_added = False
-
-
     # ========================================================
-    # SETUP
+    # REGISTER COMMANDS
     # ========================================================
-
     async def setup(self):
-
-        # ----------------------------------------------------
-        # -العاب
-        #
-        # مهم:
-        # لا نستخدم self.games_command مباشرة داخل
-        # commands.Command لأن discord.py يقوم بفحص
-        # signature الخاص بالـ bound method.
-        # ----------------------------------------------------
-
         if self.bot.get_command("العاب") is None:
-
             async def games_callback(ctx: commands.Context):
                 await self.games_command(ctx)
-
             self.bot.add_command(
                 commands.Command(
                     games_callback,
                     name="العاب",
-                    help="فتح قائمة الألعاب",
+                    help="عرض أوامر الألعاب",
                 )
             )
-
-
-        # ----------------------------------------------------
-        # -حدد_امر
-        # ----------------------------------------------------
-
         if self.bot.get_command("حدد_امر") is None:
-
-            async def setup_callback(ctx: commands.Context):
-                await self.setup_command(ctx)
-
+            async def setup_callback(
+                ctx: commands.Context,
+                slot: int = None,
+                channel: discord.TextChannel = None,
+                role: discord.Role = None,
+            ):
+                await self.setup_command(ctx, slot, channel, role)
             self.bot.add_command(
                 commands.Command(
                     setup_callback,
                     name="حدد_امر",
-                    help="إعداد رومات ورتب الألعاب",
+                    help="إعداد روم ورتبة الألعاب",
                 )
             )
-
-
-        # ----------------------------------------------------
-        # /setupgames
-        #
-        # لا نستخدم @app_commands.command على method
-        # داخل GameSystem.
-        # نسجل callback مستقل لتجنب مشاكل binding.
-        # ----------------------------------------------------
-
-        if not self.slash_added:
-
-            async def slash_callback(
-                interaction: discord.Interaction,
+        if self.bot.get_command("stop") is None:
+            async def stop_callback(ctx: commands.Context):
+                await self.stop_command(ctx)
+            self.bot.add_command(
+                commands.Command(
+                    stop_callback,
+                    name="stop",
+                    help="إيقاف اللعبة الحالية (للمسؤولين فقط)",
+                )
+            )
+        # Independent command for each game.
+        for game_key, emoji, title, command_name in GAMES:
+            if self.bot.get_command(command_name) is not None:
+                continue
+            async def game_callback(
+                ctx: commands.Context,
+                key=game_key,
             ):
-                await self.setupgames_slash(
-                    interaction
+                await self.command_start_game(ctx, key)
+            self.bot.add_command(
+                commands.Command(
+                    game_callback,
+                    name=command_name,
+                    help=f"تشغيل لعبة {title}",
                 )
-
-            slash_command = app_commands.Command(
-                name="setupgames",
-                description="إعداد رومات ورتب الألعاب",
-                callback=slash_callback,
             )
-
-            try:
-                self.bot.tree.add_command(
-                    slash_command
-                )
-            except app_commands.CommandAlreadyRegistered:
-                pass
-
-            self.slash_added = True
-
-
-        # ----------------------------------------------------
-        # on_message
-        # ----------------------------------------------------
-
         if not self.listener_added:
-
-            self.bot.add_listener(
-                self.on_message,
-                "on_message",
-            )
-
+            self.bot.add_listener(self.on_message, "on_message")
             self.listener_added = True
-
-
+        self._register_slash_commands()
+    # ========================================================
+    # SLASH COMMANDS
+    # ========================================================
+    def _register_slash_commands(self):
+        if self.slash_added:
+            return
+        async def setupgames_callback(
+            interaction: discord.Interaction,
+            slot: app_commands.Range[int, 1, 10],
+            channel: discord.TextChannel,
+            role: discord.Role,
+        ):
+            await self.slash_setupgames(
+                interaction,
+                int(slot),
+                channel,
+                role,
+            )
+        async def setexploitlog_callback(
+            interaction: discord.Interaction,
+            channel: discord.TextChannel,
+        ):
+            await self.slash_set_log_channel(
+                interaction,
+                channel,
+            )
+        async def gamesettings_callback(
+            interaction: discord.Interaction,
+        ):
+            await self.slash_gamesettings(interaction)
+        slash_commands = [
+            app_commands.Command(
+                name="setupgames",
+                description="Set a game channel and required role",
+                callback=setupgames_callback,
+            ),
+            app_commands.Command(
+                name="setexploitlog",
+                description="Set the denied game attempts log channel",
+                callback=setexploitlog_callback,
+            ),
+            app_commands.Command(
+                name="gamesettings",
+                description="Show game setup settings",
+                callback=gamesettings_callback,
+            ),
+        ]
+        for command in slash_commands:
+            try:
+                if self.bot.tree.get_command(command.name) is None:
+                    self.bot.tree.add_command(command)
+            except Exception as error:
+                print(f"[SLASH REGISTER ERROR] {command.name}: {error}")
+        self.slash_added = True
+    # ========================================================
+    # ADMIN CHECK
+    # ========================================================
+    @staticmethod
+    def is_admin(member):
+        permissions = getattr(member, "guild_permissions", None)
+        return bool(permissions and permissions.administrator)
     # ========================================================
     # LOAD SETUPS
     # ========================================================
-
     def load_setups(self, guild_id):
-
+        guild_id = int(guild_id)
         if guild_id in self.guild_setups:
             return self.guild_setups[guild_id]
-
         setups = {}
-
         try:
-
-            rows = self.bot.database.get_setups(
-                guild_id
-            )
-
+            rows = self.bot.database.get_setups(guild_id)
             for row in rows:
-
-                try:
-
-                    if isinstance(row, dict):
-
-                        slot = int(row["slot"])
-                        channel_id = int(
-                            row["channel_id"]
-                        )
-                        role_id = int(
-                            row["role_id"]
-                        )
-
-                    else:
-
-                        slot = int(row[0])
-                        channel_id = int(row[1])
-                        role_id = int(row[2])
-
-                    setups[slot] = {
-                        "channel_id": channel_id,
-                        "role_id": role_id,
-                    }
-
-                except Exception:
-                    continue
-
-        except Exception as error:
-
-            print(
-                f"[SETUP LOAD ERROR] {error}"
-            )
-
-            setups = {}
-
+                slot = int(row["slot"])
+                setups[slot] = {
+                    "channel_id": int(row["channel_id"]),
+                    "role_id": int(row["role_id"]),
+                }
+        except Exception:
+            traceback.print_exc()
         self.guild_setups[guild_id] = setups
-
         return setups
-
-
     # ========================================================
-    # -العاب
+    # SAVE SETUP
     # ========================================================
-
-    async def games_command(self, ctx):
-
-        if ctx.guild is None:
+    def set_setup(self, guild_id, slot, channel_id, role_id):
+        slot = int(slot)
+        if not 1 <= slot <= MAX_SETUP_SLOTS:
+            return False
+        try:
+            self.bot.database.save_setup(
+                int(guild_id),
+                slot,
+                int(channel_id),
+                int(role_id),
+            )
+        except Exception:
+            traceback.print_exc()
+            return False
+        self.guild_setups.setdefault(int(guild_id), {})
+        self.guild_setups[int(guild_id)][slot] = {
+            "channel_id": int(channel_id),
+            "role_id": int(role_id),
+        }
+        return True
+    # ========================================================
+    # ACCESS CHECK
+    # ========================================================
+    def can_use_games(self, guild_id, channel_id, member):
+        if ADMIN_BYPASS_SETUP and self.is_admin(member):
+            return True
+        setups = self.load_setups(guild_id)
+        # No setup means normal users cannot start games.
+        if not setups:
+            return False
+        matching_channel_setups = [
+            setup for setup in setups.values()
+            if setup["channel_id"] == int(channel_id)
+        ]
+        if not matching_channel_setups:
+            return False
+        member_roles = {
+            role.id for role in getattr(member, "roles", [])
+        }
+        return any(
+            setup["role_id"] in member_roles
+            for setup in matching_channel_setups
+        )
+    # ========================================================
+    # SECURITY LOGGING
+    # ========================================================
+    async def log_denied_attempt(
+        self,
+        guild,
+        channel,
+        member,
+        game_key,
+        reason,
+    ):
+        if not EXPLOIT_LOGGING_ENABLED:
             return
-
+        cooldown_key = (
+            guild.id,
+            member.id,
+            channel.id,
+            game_key,
+        )
+        now = time.monotonic()
+        previous = self.log_cooldowns.get(cooldown_key, 0)
+        if now - previous < EXPLOIT_LOG_COOLDOWN_SECONDS:
+            return
+        self.log_cooldowns[cooldown_key] = now
+        try:
+            self.bot.database.add_exploit_log(
+                guild.id,
+                member.id,
+                channel.id,
+                GAME_NAMES.get(game_key, game_key),
+                reason,
+            )
+        except Exception:
+            traceback.print_exc()
+        log_channel_id = None
+        try:
+            log_channel_id = self.bot.database.get_log_channel(guild.id)
+        except Exception:
+            traceback.print_exc()
+        if not log_channel_id:
+            log_channel_id = EXPLOIT_LOG_CHANNEL_ID
+        if not log_channel_id:
+            return
+        log_channel = guild.get_channel(int(log_channel_id))
+        if log_channel is None:
+            try:
+                log_channel = await self.bot.fetch_channel(
+                    int(log_channel_id)
+                )
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return
+        report = embed(
+            "🚨 محاولة تشغيل لعبة مرفوضة",
+            f"👤 المستخدم: {member.mention}\n"
+            f"🎮 اللعبة: **{GAME_NAMES.get(game_key, game_key)}**\n"
+            f"📢 الروم: {channel.mention}\n"
+            f"📝 السبب: **{reason}**\n"
+            f"🕒 الوقت: <t:{int(time.time())}:F>",
+            discord.Color.red(),
+        )
+        try:
+            await log_channel.send(
+                embed=report,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+    # ========================================================
+    # START COMMAND
+    # ========================================================
+    async def command_start_game(self, ctx, game_key):
+        if ctx.guild is None:
+            await ctx.send("❌ الألعاب تعمل داخل السيرفر فقط.")
+            return
         if not self.can_use_games(
             ctx.guild.id,
             ctx.channel.id,
             ctx.author,
         ):
-
+            setups = self.load_setups(ctx.guild.id)
+            channel_has_setup = any(
+                setup["channel_id"] == ctx.channel.id
+                for setup in setups.values()
+            )
+            reason = (
+                "لا يملك الرتبة المطلوبة"
+                if channel_has_setup
+                else "محاولة تشغيل اللعبة في روم غير مخصص"
+            )
+            await self.log_denied_attempt(
+                ctx.guild,
+                ctx.channel,
+                ctx.author,
+                game_key,
+                reason,
+            )
             await ctx.send(
-                "❌ ما عندك صلاحية تشغيل الألعاب في هذا الروم."
+                "❌ ما عندك الصلاحية المطلوبة لتشغيل الألعاب في هذا الروم."
             )
             return
-
-        embed = game_embed(
-            "🎮 قائمة الألعاب",
-            "اختر اللعبة من القائمة وستبدأ مباشرة.\n\n"
-            "🎯 ألعاب إقصاء\n"
-            "🧠 ألعاب تخمين\n"
-            "⚡ ألعاب سرعة\n"
-            "👥 ألعاب جماعية\n"
-            "🔤 ألعاب نصوص",
+        if ctx.channel.id in self.active_games:
+            await ctx.send("⚠️ توجد لعبة شغالة حاليًا في هذا الروم.")
+            return
+        task = asyncio.create_task(
+            self._run_game(ctx, game_key)
         )
-
-        await ctx.send(
-            embed=embed,
-            view=GamesView(self),
-        )
-
-
+        # State is installed before the task starts running.
+        self.active_games[ctx.channel.id] = {
+            "game": game_key,
+            "starter": ctx.author.id,
+            "task": task,
+            "ended": asyncio.Event(),
+            "answer": None,
+            "aliases": [],
+            "winner": None,
+        }
+    async def _run_game(self, ctx, game_key):
+        channel_id = ctx.channel.id
+        # Give command_start_game time to install the state.
+        await asyncio.sleep(0)
+        state = self.active_games.get(channel_id)
+        if not state:
+            return
+        try:
+            method = getattr(self, f"game_{game_key}", None)
+            if method is None:
+                await ctx.send("❌ اللعبة غير موجودة.")
+                return
+            await method(ctx.channel)
+        except asyncio.CancelledError:
+            try:
+                await ctx.channel.send("🛑 تم إيقاف اللعبة.")
+            except discord.HTTPException:
+                pass
+            raise
+        except Exception as error:
+            print(f"[GAME ERROR] {game_key}: {error}")
+            traceback.print_exc()
+            try:
+                await ctx.send("❌ حدث خطأ أثناء اللعبة.")
+            except discord.HTTPException:
+                pass
+        finally:
+            current = self.active_games.get(channel_id)
+            if current is state:
+                self.active_games.pop(channel_id, None)
+    # ========================================================
+    # -العاب - PLAIN TEXT LIST
+    # ========================================================
+    async def games_command(self, ctx):
+        if ctx.guild is None:
+            await ctx.send("❌ هذا الأمر داخل السيرفر فقط.")
+            return
+        if not self.can_use_games(
+            ctx.guild.id,
+            ctx.channel.id,
+            ctx.author,
+        ):
+            await ctx.send(
+                "❌ ما عندك الصلاحية المطلوبة لعرض الألعاب هنا."
+            )
+            return
+        lines = ["🎮 **أوامر الألعاب:**", ""]
+        for key, emoji, title, command_name in GAMES:
+            lines.append(f"{emoji} `{PREFIX}{command_name}` — {title}")
+        lines.append("")
+        lines.append("لإيقاف اللعبة الحالية: `-stop`")
+        # Plain text, no embed and no select menu.
+        await ctx.send("\n".join(lines))
     # ========================================================
     # -حدد_امر
     # ========================================================
-
-    async def setup_command(self, ctx):
-
+    async def setup_command(self, ctx, slot=None, channel=None, role=None):
         if ctx.guild is None:
+            await ctx.send("❌ هذا الأمر داخل السيرفر فقط.")
             return
-
-        if not ctx.author.guild_permissions.manage_guild:
-
+        if not self.is_admin(ctx.author):
+            await ctx.send("❌ هذا الأمر للمسؤولين فقط.")
+            return
+        if slot is None or channel is None or role is None:
             await ctx.send(
-                "❌ هذا الأمر للإدارة فقط."
+                "طريقة الاستخدام:\n"
+                "`-حدد_امر رقم_الإعداد #الروم @الرتبة`\n\n"
+                "مثال:\n"
+                "`-حدد_امر 1 #الألعاب @لاعب`\n\n"
+                "يمكنك إعداد حتى "
+                f"**{MAX_SETUP_SLOTS}** إعدادات."
             )
             return
-
-        embed = game_embed(
-            "⚙️ إعداد الألعاب",
-            "اختر رقم الإعداد الذي تريد تعديله.\n\n"
-            f"الحد الأقصى: **{MAX_SETUP_SLOTS} إعدادات**.\n"
-            "كل إعداد = روم + رتبة.",
+        if not 1 <= int(slot) <= MAX_SETUP_SLOTS:
+            await ctx.send(
+                f"❌ رقم الإعداد يجب أن يكون من 1 إلى {MAX_SETUP_SLOTS}."
+            )
+            return
+        saved = self.set_setup(
+            ctx.guild.id,
+            slot,
+            channel.id,
+            role.id,
         )
-
+        if not saved:
+            await ctx.send("❌ تعذر حفظ الإعداد في قاعدة البيانات.")
+            return
         await ctx.send(
-            embed=embed,
-            view=SetupMainView(self),
+            f"✅ تم حفظ الإعداد **{slot}**.\n"
+            f"📢 الروم: {channel.mention}\n"
+            f"👤 الرتبة: {role.mention}"
         )
-
-
     # ========================================================
     # /setupgames
     # ========================================================
-
-    async def setupgames_slash(
+    async def slash_setupgames(
         self,
-        interaction: discord.Interaction,
+        interaction,
+        slot,
+        channel,
+        role,
     ):
-
         if interaction.guild is None:
-
             await interaction.response.send_message(
                 "❌ هذا الأمر داخل السيرفر فقط.",
                 ephemeral=True,
             )
             return
-
-        if not interaction.user.guild_permissions.manage_guild:
-
+        if not self.is_admin(interaction.user):
             await interaction.response.send_message(
-                "❌ هذا الأمر للإدارة فقط.",
+                "❌ هذا الأمر للمسؤولين فقط.",
                 ephemeral=True,
             )
             return
-
-        embed = game_embed(
-            "⚙️ إعداد الألعاب",
-            "اختر رقم الإعداد.\n\n"
-            f"يمكنك إعداد حتى **{MAX_SETUP_SLOTS}** "
-            "رومات ورتب.",
+        if not 1 <= int(slot) <= MAX_SETUP_SLOTS:
+            await interaction.response.send_message(
+                f"❌ اختر رقمًا بين 1 و{MAX_SETUP_SLOTS}.",
+                ephemeral=True,
+            )
+            return
+        saved = self.set_setup(
+            interaction.guild.id,
+            slot,
+            channel.id,
+            role.id,
         )
-
+        if not saved:
+            await interaction.response.send_message(
+                "❌ تعذر حفظ الإعداد.",
+                ephemeral=True,
+            )
+            return
         await interaction.response.send_message(
-            embed=embed,
-            view=SetupMainView(self),
+            f"✅ تم إعداد رقم **{slot}**.\n"
+            f"📢 الروم: {channel.mention}\n"
+            f"👤 الرتبة المطلوبة: {role.mention}",
             ephemeral=True,
         )
-
-
     # ========================================================
-    # SAVE SETUP
+    # /setexploitlog
     # ========================================================
-
-    def set_setup(
-        self,
-        guild_id,
-        slot,
-        channel_id,
-        role_id,
-    ):
-
-        if not 1 <= int(slot) <= MAX_SETUP_SLOTS:
-            return False
-
-        guild_id = int(guild_id)
-        slot = int(slot)
-        channel_id = int(channel_id)
-        role_id = int(role_id)
-
-        if guild_id not in self.guild_setups:
-            self.guild_setups[guild_id] = {}
-
-        self.guild_setups[guild_id][slot] = {
-            "channel_id": channel_id,
-            "role_id": role_id,
-        }
-
+    async def slash_set_log_channel(self, interaction, channel):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "❌ هذا الأمر داخل السيرفر فقط.",
+                ephemeral=True,
+            )
+            return
+        if not self.is_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ هذا الأمر للمسؤولين فقط.",
+                ephemeral=True,
+            )
+            return
         try:
-
-            self.bot.database.save_setup(
-                guild_id,
-                slot,
-                channel_id,
-                role_id,
+            self.bot.database.set_log_channel(
+                interaction.guild.id,
+                channel.id,
             )
-
-        except Exception as error:
-
-            print(
-                f"[SETUP SAVE ERROR] {error}"
-            )
-
-        return True
-
-
-    # ========================================================
-    # ACCESS
-    # ========================================================
-
-    def can_use_games(
-        self,
-        guild_id,
-        channel_id,
-        member,
-    ):
-
-        setups = self.load_setups(
-            guild_id
-        )
-
-        # إذا لم يتم إعداد أي روم:
-        # الإدارة تستطيع الاختبار.
-        if not setups:
-            return member.guild_permissions.manage_guild
-
-        for setup in setups.values():
-
-            if setup["channel_id"] != int(channel_id):
-                continue
-
-            if member.guild_permissions.manage_guild:
-                return True
-
-            role_id = setup["role_id"]
-
-            return any(
-                role.id == role_id
-                for role in member.roles
-            )
-
-        return False
-
-
-    # ========================================================
-    # START GAME
-    # ========================================================
-
-    async def start_game(
-        self,
-        channel,
-        starter,
-        game_key,
-    ):
-
-        if channel is None:
-            return
-
-        channel_id = channel.id
-
-        if channel_id in self.active_games:
-
-            await channel.send(
-                "⚠️ توجد لعبة شغالة حاليًا في هذا الروم."
-            )
-            return
-
-        method = getattr(
-            self,
-            f"game_{game_key}",
-            None,
-        )
-
-        if method is None:
-
-            await channel.send(
-                "❌ هذه اللعبة غير متاحة."
-            )
-            return
-
-        self.active_games[channel_id] = {
-            "game": game_key,
-            "starter": starter.id,
-            "started": time.time(),
-        }
-
-        try:
-
-            await method(channel)
-
-        except asyncio.CancelledError:
-
-            raise
-
-        except Exception as error:
-
-            print(
-                f"[GAME ERROR] {game_key}: {error}"
-            )
-
-            import traceback
-
+        except Exception:
             traceback.print_exc()
-
-            try:
-                await channel.send(
-                    "❌ حدث خطأ داخل اللعبة وتم إيقافها."
-                )
-            except Exception:
-                pass
-
-        finally:
-
-            self.active_games.pop(
-                channel_id,
-                None,
+            await interaction.response.send_message(
+                "❌ تعذر حفظ روم السجلات.",
+                ephemeral=True,
             )
-
-
+            return
+        await interaction.response.send_message(
+            f"✅ تم تعيين روم سجلات المحاولات المرفوضة: {channel.mention}",
+            ephemeral=True,
+        )
     # ========================================================
-    # MESSAGE LISTENER
+    # /gamesettings
     # ========================================================
-
+    async def slash_gamesettings(self, interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "❌ هذا الأمر داخل السيرفر فقط.",
+                ephemeral=True,
+            )
+            return
+        if not self.is_admin(interaction.user):
+            await interaction.response.send_message(
+                "❌ هذا الأمر للمسؤولين فقط.",
+                ephemeral=True,
+            )
+            return
+        setups = self.load_setups(interaction.guild.id)
+        lines = []
+        for slot, setup in sorted(setups.items()):
+            lines.append(
+                f"**الإعداد {slot}:** "
+                f"<#{setup['channel_id']}> — "
+                f"<@&{setup['role_id']}>"
+            )
+        if not lines:
+            lines.append("لا توجد إعدادات ألعاب محفوظة.")
+        try:
+            log_id = self.bot.database.get_log_channel(
+                interaction.guild.id
+            )
+        except Exception:
+            log_id = None
+        lines.append("")
+        lines.append(
+            f"**روم السجلات:** {f'<#{log_id}>' if log_id else 'غير محدد'}"
+        )
+        await interaction.response.send_message(
+            embed=embed(
+                "⚙️ إعدادات الألعاب",
+                "\n".join(lines),
+            ),
+            ephemeral=True,
+        )
+    # ========================================================
+    # -stop
+    # ========================================================
+    async def stop_command(self, ctx):
+        if ctx.guild is None:
+            await ctx.send("❌ هذا الأمر داخل السيرفر فقط.")
+            return
+        if not self.is_admin(ctx.author):
+            await ctx.send("❌ أمر `-stop` للمسؤولين فقط.")
+            return
+        state = self.active_games.get(ctx.channel.id)
+        if not state:
+            await ctx.send("ℹ️ لا توجد لعبة شغالة في هذا الروم.")
+            return
+        task = state.get("task")
+        if task and not task.done():
+            task.cancel()
+        await ctx.send("🛑 تم طلب إيقاف اللعبة.")
+    # ========================================================
+    # MESSAGE ANSWERS
+    # ========================================================
     async def on_message(self, message):
-
-        if message.author.bot:
+        if message.author.bot or message.guild is None:
             return
-
-        if message.guild is None:
-            return
-
         if message.content.startswith(PREFIX):
             return
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
+        state = self.active_games.get(message.channel.id)
+        if not state or state.get("ended").is_set():
             return
-
-        handler = getattr(
-            self,
-            f"answer_{game['game']}",
-            None,
-        )
-
-        if handler:
-
-            try:
-                await handler(message)
-
-            except Exception as error:
-
-                print(
-                    f"[ANSWER ERROR] {error}"
-                )
-
-
+        answer = state.get("answer")
+        if answer is None:
+            return
+        if matches_answer(
+            message.content,
+            answer,
+            state.get("aliases"),
+        ):
+            state["winner"] = message.author
+            state["ended"].set()
     # ========================================================
-    # WINNER
+    # ANSWER ROUND HELPER
     # ========================================================
-
-    async def winner(
+    async def text_round(
         self,
         channel,
-        member,
-        points=WIN_POINTS,
+        title,
+        description,
+        answer,
+        aliases=None,
+        timeout=TEXT_GAME_TIME,
+        image=None,
     ):
-
+        state = self.active_games.get(channel.id)
+        if not state:
+            return None
+        state["answer"] = answer
+        state["aliases"] = aliases or []
+        state["winner"] = None
+        state["ended"] = asyncio.Event()
+        game_embed = embed(title, description)
+        if image:
+            game_embed.set_image(url=image)
+        await channel.send(embed=game_embed)
+        try:
+            await asyncio.wait_for(
+                state["ended"].wait(),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            pass
+        winner = state.get("winner")
+        if winner:
+            await self.winner(channel, winner)
+        else:
+            await channel.send(f"⏰ انتهى الوقت! الإجابة: **{answer}**")
+        return winner
+    # ========================================================
+    # WINNER + POINTS
+    # ========================================================
+    async def winner(self, channel, member, points=WIN_POINTS):
         if member is None:
             return
-
-        self.points[member.id] = (
-            self.points.get(
-                member.id,
-                0,
-            )
-            + points
-        )
-
-        embed = game_embed(
-            "🏆 الفائز!",
-            f"🎉 الفائز: {member.mention}\n\n"
-            f"⭐ النقاط: **+{points}**",
-            discord.Color.green(),
-        )
-
+        self.points[member.id] = self.points.get(member.id, 0) + points
         await channel.send(
-            embed=embed
+            embed=embed(
+                "🏆 الفائز!",
+                f"🎉 الفائز: {member.mention}\n"
+                f"⭐ النقاط: **+{points}**",
+                discord.Color.green(),
+            )
         )
-
-        # User / Member ليس بالضرورة عنده guild.
-        # لذلك نأخذ guild من channel.
         guild = getattr(channel, "guild", None)
-
         if guild is None:
             return
-
         try:
-
             self.bot.database.add_win(
                 guild.id,
                 member.id,
                 points,
             )
-
-        except Exception as error:
-
-            print(
-                f"[DATABASE WIN ERROR] {error}"
-            )
-
+        except Exception:
+            traceback.print_exc()
         try:
-
             game_key = self.active_games.get(
-                channel.id,
-                {},
-            ).get(
-                "game",
-                "unknown",
-            )
-
+                channel.id, {}
+            ).get("game", "unknown")
             self.bot.database.add_game_history(
                 guild.id,
                 channel.id,
-                GAME_NAMES.get(
-                    game_key,
-                    "لعبة",
-                ),
+                GAME_NAMES.get(game_key, game_key),
                 member.id,
                 points,
             )
-
         except Exception:
-            pass
-
-
+            traceback.print_exc()
+    # ========================================================
+    # MULTIPLAYER JOIN HELPER
+    # ========================================================
+    async def collect_players(
+        self,
+        channel,
+        title,
+        description,
+        minimum=2,
+        maximum=20,
+        timeout=30,
+    ):
+        view = JoinView(
+            minimum=minimum,
+            maximum=maximum,
+            timeout=timeout,
+        )
+        await channel.send(
+            embed=embed(
+                title,
+                description + "\n\nاضغط زر الانضمام.",
+            ),
+            view=view,
+        )
+        await view.wait()
+        players = list(view.players.values())
+        if len(players) < minimum:
+            await channel.send(
+                f"❌ لم يكتمل العدد المطلوب. تحتاج {minimum} لاعبين على الأقل."
+            )
+            return []
+        return players
     # ========================================================
     # GAME 1 - ROULETTE
     # ========================================================
-
     async def game_roulette(self, channel):
-
-        view = JoinView(
-            minimum=2,
-            maximum=20,
-            timeout=30,
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "🎯 روليت",
-                "لعبة إقصاء عشوائي فقط.\n"
-                "بدون رهانات أو أموال.\n\n"
-                "🎮 اضغط انضمام.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        players = list(
-            view.players.values()
-        )
-
-        if len(players) < 2:
-
-            await channel.send(
-                "❌ لم يكتمل عدد اللاعبين."
-            )
-            return
-
-        while len(players) > 1:
-
-            eliminated = random.choice(players)
-
-            players.remove(eliminated)
-
-            await channel.send(
-                f"🎯 تم اختيار {eliminated.mention}.\n"
-                "❌ خرج من الجولة!"
-            )
-
-            await asyncio.sleep(2)
-
-        await self.winner(
+        players = await self.collect_players(
             channel,
-            players[0],
+            "🎯 روليت",
+            "لعبة إقصاء عشوائي بدون رهانات.",
+            2,
+            20,
+            ROULETTE_TIME,
         )
-
-
+        if not players:
+            return
+        while len(players) > 1:
+            await asyncio.sleep(2)
+            eliminated = random.choice(players)
+            players.remove(eliminated)
+            await channel.send(
+                f"🎯 خرج {eliminated.mention} من الجولة!"
+            )
+        await self.winner(channel, players[0])
     # ========================================================
     # GAME 2 - XO
     # ========================================================
-
     async def game_xo(self, channel):
-
-        view = JoinView(
-            minimum=2,
-            maximum=2,
-            timeout=30,
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "❌⭕ إكس أو",
-                "🎮 يحتاج لاعبين.\n"
-                "اضغط انضمام.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        players = list(
-            view.players.values()
-        )
-
-        if len(players) != 2:
-
-            await channel.send(
-                "❌ تحتاج لاعبين بالضبط."
-            )
-            return
-
-        game = XOGame(
-            self,
-            channel,
-            players[0],
-            players[1],
-        )
-
-        await game.start()
-
-        for _ in range(120):
-
-            if channel.id not in self.active_games:
-                return
-
-            if game.finished:
-                return
-
-            await asyncio.sleep(1)
-
-
+        await self.play_xo(channel, fiery=False)
     # ========================================================
     # GAME 3 - MAFIA
     # ========================================================
-
     async def game_mafia(self, channel):
-
-        view = JoinView(
-            minimum=4,
-            maximum=12,
-            timeout=30,
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "🕵️ مافيا",
-                "🎮 انضم للعبة.\n"
-                "يجب وجود 4 لاعبين على الأقل.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        players = list(
-            view.players.values()
-        )
-
-        if len(players) < 4:
-
-            await channel.send(
-                "❌ تحتاج 4 لاعبين على الأقل."
-            )
-            return
-
-        mafia_count = max(
-            1,
-            len(players) // 4,
-        )
-
-        mafia_players = random.sample(
-            players,
-            mafia_count,
-        )
-
-        mafia_ids = {
-            player.id
-            for player in mafia_players
-        }
-
-        for player in players:
-
-            try:
-
-                if player.id in mafia_ids:
-
-                    await player.send(
-                        "🕵️ **دورك: مافيا**\n"
-                        "حافظ على سريتك."
-                    )
-
-                else:
-
-                    await player.send(
-                        "👤 **دورك: مواطن**\n"
-                        "حاول اكتشاف المافيا."
-                    )
-
-            except discord.Forbidden:
-                pass
-
-        await channel.send(
-            embed=game_embed(
-                "🕵️ بدأت المافيا!",
-                "📩 تم إرسال الأدوار في الخاص.\n\n"
-                f"👥 عدد اللاعبين: {len(players)}\n"
-                f"🕵️ عدد المافيا: {mafia_count}\n\n"
-                f"⏱️ الجولة تستمر {MAFIA_TIME} ثانية.",
-            )
-        )
-
-        await asyncio.sleep(MAFIA_TIME)
-
-        winner = random.choice(players)
-
-        await self.winner(
+        players = await self.collect_players(
             channel,
-            winner,
+            "🕵️ مافيا",
+            "انضم للعبة. تحتاج 4 لاعبين على الأقل.",
+            4,
+            12,
+            30,
         )
-
-
+        if not players:
+            return
+        mafia_count = max(1, len(players) // 4)
+        mafia = random.sample(players, mafia_count)
+        mafia_ids = {player.id for player in mafia}
+        for player in players:
+            try:
+                if player.id in mafia_ids:
+                    await player.send(
+                        "🕵️ دورك: **مافيا**. حاول ألا تكشف هويتك."
+                    )
+                else:
+                    await player.send(
+                        "👤 دورك: **مواطن**. حاول اكتشاف المافيا."
+                    )
+            except discord.HTTPException:
+                pass
+        await channel.send(
+            f"🕵️ بدأت المافيا!\n"
+            f"👥 اللاعبون: **{len(players)}**\n"
+            f"🕵️ المافيا: **{mafia_count}**\n"
+            f"⏱️ تنتهي الجولة خلال {MAFIA_TIME} ثانية."
+        )
+        await asyncio.sleep(MAFIA_TIME)
+        survivors = [p for p in players if p.id not in mafia_ids]
+        if survivors:
+            winner = random.choice(survivors)
+        else:
+            winner = random.choice(players)
+        await channel.send(
+            "🔎 انتهت الجولة. تم كشف الأدوار:\n"
+            + "\n".join(
+                f"{'🕵️ مافيا' if p.id in mafia_ids else '👤 مواطن'}: {p.mention}"
+                for p in players
+            )
+        )
+        await self.winner(channel, winner)
     # ========================================================
     # GAME 4 - MUSICAL CHAIRS
     # ========================================================
-
     async def game_musical_chairs(self, channel):
-
-        view = JoinView(
-            minimum=3,
-            maximum=20,
-            timeout=30,
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "🪑 الكراسي الموسيقية",
-                "🎮 انضم للعبة.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        players = list(
-            view.players.values()
-        )
-
-        if len(players) < 3:
-
-            await channel.send(
-                "❌ تحتاج 3 لاعبين على الأقل."
-            )
-            return
-
-        while len(players) > 1:
-
-            await channel.send(
-                "🎵 الموسيقى شغالة..."
-            )
-
-            await asyncio.sleep(2)
-
-            eliminated = random.choice(players)
-
-            players.remove(eliminated)
-
-            await channel.send(
-                "🪑 توقفت الموسيقى!\n"
-                f"❌ {eliminated.mention} خرج."
-            )
-
-            await asyncio.sleep(1)
-
-        await self.winner(
+        players = await self.collect_players(
             channel,
-            players[0],
+            "🪑 الكراسي الموسيقية",
+            "ابقَ حتى تكون آخر لاعب.",
+            3,
+            20,
+            30,
         )
-
-
+        if not players:
+            return
+        while len(players) > 1:
+            await channel.send("🎵 الموسيقى شغالة...")
+            await asyncio.sleep(2)
+            eliminated = random.choice(players)
+            players.remove(eliminated)
+            await channel.send(
+                f"🪑 توقفت الموسيقى! خرج {eliminated.mention}."
+            )
+            await asyncio.sleep(1)
+        await self.winner(channel, players[0])
     # ========================================================
-    # GAME 5 - RPS
+    # GAME 5 - ROCK PAPER SCISSORS
     # ========================================================
-
     async def game_rps(self, channel):
-
-        view = RPSView()
-
-        await channel.send(
-            embed=game_embed(
-                "🪨📄✂️ حجر ورق مقص",
-                "أول لاعبين يختارون يدخلون الجولة.",
-            ),
-            view=view,
+        players = await self.collect_players(
+            channel,
+            "🪨 حجر ورق مقص",
+            "أول لاعبين ينضمان يدخلان الجولة.",
+            2,
+            2,
+            30,
         )
-
-        await view.wait()
-
-        players = list(
-            view.choices.keys()
-        )[:2]
-
-        if len(players) < 2:
-
-            await channel.send(
-                "❌ لم يدخل لاعبان."
+        if len(players) != 2:
+            return
+        choices = {}
+        allowed = {
+            "حجر": "rock",
+            "ورق": "paper",
+            "مقص": "scissors",
+            "rock": "rock",
+            "paper": "paper",
+            "scissors": "scissors",
+        }
+        await channel.send(
+            "اكتبوا اختياركم برسالة:\n"
+            "`حجر` أو `ورق` أو `مقص`."
+        )
+        async def get_choice(player):
+            def check(message):
+                return (
+                    message.author.id == player.id
+                    and message.channel.id == channel.id
+                    and normalize(message.content) in {
+                        normalize(k) for k in allowed
+                    }
+                )
+            message = await self.bot.wait_for(
+                "message",
+                timeout=FAST_GAME_TIME,
+                check=check,
             )
-            return
-
-        p1 = self.bot.get_user(players[0])
-        p2 = self.bot.get_user(players[1])
-
-        if p1 is None or p2 is None:
-            return
-
-        c1 = view.choices[players[0]]
-        c2 = view.choices[players[1]]
-
-        if c1 == c2:
-
-            await channel.send(
-                "🤝 تعادل!"
+            choices[player.id] = allowed[normalize(message.content)]
+        try:
+            await asyncio.gather(
+                get_choice(players[0]),
+                get_choice(players[1]),
             )
+        except asyncio.TimeoutError:
+            await channel.send("⏰ انتهى الوقت قبل أن يختار اللاعبان.")
             return
-
+        a = choices[players[0].id]
+        b = choices[players[1].id]
+        if a == b:
+            await channel.send("🤝 تعادل! أعد تشغيل اللعبة لجولة جديدة.")
+            return
         wins = {
             ("rock", "scissors"),
             ("paper", "rock"),
             ("scissors", "paper"),
         }
-
-        winner = p1 if (c1, c2) in wins else p2
-
-        await self.winner(
-            channel,
-            winner,
-        )
-
-
+        winner = players[0] if (a, b) in wins else players[1]
+        await self.winner(channel, winner)
     # ========================================================
     # GAME 6 - FIERY XO
     # ========================================================
-
     async def game_fiery_xo(self, channel):
-
-        view = JoinView(
-            minimum=2,
-            maximum=2,
-            timeout=30,
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "🔥 إكس أو النارية",
-                "اضغط انضمام.\n\n"
-                "⚠️ توجد خانات 🔥.\n"
-                "الضغط على خانة نارية يعني الخسارة.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        players = list(
-            view.players.values()
-        )
-
-        if len(players) != 2:
-
-            await channel.send(
-                "❌ تحتاج لاعبين بالضبط."
-            )
-            return
-
-        game = XOGame(
-            self,
+        await self.play_xo(channel, fiery=True)
+    # ========================================================
+    # XO ENGINE
+    # ========================================================
+    async def play_xo(self, channel, fiery=False):
+        players = await self.collect_players(
             channel,
-            players[0],
-            players[1],
-            fiery=True,
+            "🔥 إكس أو النارية" if fiery else "❌⭕ إكس أو",
+            "تحتاج لاعبين اثنين.",
+            2,
+            2,
+            30,
         )
-
-        await game.start()
-
-        for _ in range(120):
-
-            if channel.id not in self.active_games:
-                return
-
-            if game.finished:
-                return
-
-            await asyncio.sleep(1)
-
-
-    # ========================================================
-    # GAME 7 - HIDE & SEEK
-    # ========================================================
-
-    async def game_hide_seek(self, channel):
-
-        view = JoinView(
-            minimum=3,
-            maximum=15,
-            timeout=30,
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "👀 الغميضة",
-                "اضغط انضمام.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        players = list(
-            view.players.values()
-        )
-
-        if len(players) < 3:
-
-            await channel.send(
-                "❌ تحتاج 3 لاعبين على الأقل."
-            )
+        if len(players) != 2:
             return
-
-        seeker = random.choice(players)
-
-        hidden_players = [
-            player
-            for player in players
-            if player.id != seeker.id
+        board = ["⬜"] * 9
+        symbols = {players[0].id: "❌", players[1].id: "⭕"}
+        current_index = 0
+        fire_cells = set(random.sample(range(9), 2)) if fiery else set()
+        combinations = [
+            (0, 1, 2), (3, 4, 5), (6, 7, 8),
+            (0, 3, 6), (1, 4, 7), (2, 5, 8),
+            (0, 4, 8), (2, 4, 6),
         ]
-
-        hidden = random.choice(hidden_players)
-
+        def render():
+            shown = [
+                "🔥" if fiery and i in fire_cells and board[i] == "⬜"
+                else board[i]
+                for i in range(9)
+            ]
+            return (
+                f"{shown[0]} {shown[1]} {shown[2]}\n"
+                f"{shown[3]} {shown[4]} {shown[5]}\n"
+                f"{shown[6]} {shown[7]} {shown[8]}"
+            )
+        await channel.send(
+            f"**{'🔥 إكس أو النارية' if fiery else '❌⭕ إكس أو'}**\n"
+            f"{render()}\n\n"
+            "اكتب رقم الخانة من 1 إلى 9."
+        )
+        for _ in range(9):
+            player = players[current_index]
+            def check(message):
+                return (
+                    message.channel.id == channel.id
+                    and message.author.id == player.id
+                    and message.content.strip() in {
+                        str(i) for i in range(1, 10)
+                    }
+                )
+            try:
+                message = await self.bot.wait_for(
+                    "message",
+                    timeout=120,
+                    check=check,
+                )
+            except asyncio.TimeoutError:
+                await channel.send("⏰ انتهى وقت اللعبة.")
+                return
+            index = int(message.content.strip()) - 1
+            if board[index] != "⬜":
+                await channel.send("❌ الخانة مستخدمة. انتهت فرصتك لهذا الدور.")
+                current_index = 1 - current_index
+                continue
+            if fiery and index in fire_cells:
+                loser = player
+                winner = players[1 - current_index]
+                await channel.send(
+                    f"🔥 ضغط {loser.mention} على خانة نارية وخسر!\n"
+                    f"🏆 الفائز: {winner.mention}"
+                )
+                await self.winner(channel, winner)
+                return
+            board[index] = symbols[player.id]
+            for a, b, c in combinations:
+                if board[a] == board[b] == board[c] and board[a] in ("❌", "⭕"):
+                    await channel.send(
+                        f"{render()}\n\n🏆 الفائز: {player.mention}"
+                    )
+                    await self.winner(channel, player)
+                    return
+            await channel.send(render())
+            current_index = 1 - current_index
+        await channel.send("🤝 انتهت اللعبة بالتعادل.")
+    # ========================================================
+    # GAME 7 - HIDE AND SEEK
+    # ========================================================
+    async def game_hide_seek(self, channel):
+        players = await self.collect_players(
+            channel,
+            "👀 الغميضة",
+            "انضم للعبة.",
+            3,
+            15,
+            30,
+        )
+        if len(players) < 3:
+            return
+        seeker = random.choice(players)
+        hidden = random.choice([p for p in players if p.id != seeker.id])
         await channel.send(
             f"👀 الباحث: {seeker.mention}\n"
-            "🙈 تم اختيار المختبئ.\n\n"
-            f"⏱️ أمام الباحث {HIDE_SEEK_TIME} ثانية.",
+            f"🙈 تم اختيار المختبئ. أمام الباحث {HIDE_SEEK_TIME} ثانية."
         )
-
         await asyncio.sleep(HIDE_SEEK_TIME)
-
-        await channel.send(
-            f"🔎 المختبئ كان: {hidden.mention}"
-        )
-
-        await self.winner(
-            channel,
-            seeker,
-        )
-
-
+        await channel.send(f"🔎 كان المختبئ: {hidden.mention}")
+        await self.winner(channel, seeker)
     # ========================================================
     # GAME 8 - REPLIKA
     # ========================================================
-
     async def game_replika(self, channel):
-
-        sentences = [
+        sentence = random.choice([
             "انا احب البرمجة",
             "اليوم الجو جميل",
             "البوت سريع جدا",
             "الالعاب ممتعة",
             "هذا اختبار سرعة",
             "ديسكورد رائع",
-        ]
-
-        sentence = random.choice(sentences)
-
-        self.active_games[channel.id]["answer"] = normalize(
-            sentence
+        ])
+        await self.text_round(
+            channel,
+            "🤖 ريبلكا",
+            f"انسخ الجملة كما هي:\n\n**{sentence}**",
+            sentence,
+            timeout=TEXT_GAME_TIME,
         )
-
-        await channel.send(
-            embed=game_embed(
-                "🤖 ريبلكا",
-                f"انسخ الجملة كما هي:\n\n"
-                f"**{sentence}**\n\n"
-                f"⏱️ لديك {TEXT_GAME_TIME} ثانية.",
-            )
-        )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ انتهى الوقت!\n"
-                f"الإجابة: **{sentence}**"
-            )
-
-
-    async def answer_replika(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if normalize(message.content) != game.get("answer"):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 9 - GUESS COUNTRY
     # ========================================================
-
     async def game_guess_country(self, channel):
-
-        item = random.choice(FLAGS)
-
-        clues = {
-            "السعودية": "تقع في شبه الجزيرة العربية.",
-            "الإمارات": "عاصمتها أبوظبي.",
-            "الكويت": "دولة خليجية.",
-            "قطر": "استضافت كأس العالم 2022.",
-            "البحرين": "دولة جزيرية خليجية.",
-            "عمان": "تقع جنوب شرق شبه الجزيرة العربية.",
-            "مصر": "يمر بها نهر النيل.",
-            "العراق": "دجلة والفرات يمران بها.",
-            "الأردن": "عاصمتها عمّان.",
-            "المغرب": "تقع في شمال غرب أفريقيا.",
-            "الجزائر": "أكبر دول أفريقيا مساحة.",
-            "تونس": "دولة في شمال أفريقيا.",
-            "تركيا": "تقع بين آسيا وأوروبا.",
-            "فرنسا": "عاصمتها باريس.",
-            "ألمانيا": "عاصمتها برلين.",
-            "إيطاليا": "تشتهر بشكل شبه الجزيرة.",
-            "إسبانيا": "تقع في شبه الجزيرة الإيبيرية.",
-            "اليابان": "دولة جزرية في شرق آسيا.",
-            "الصين": "دولة كبيرة في شرق آسيا.",
-            "الهند": "تقع في جنوب آسيا.",
-            "البرازيل": "أكبر دولة في أمريكا الجنوبية.",
-            "الأرجنتين": "تقع في جنوب أمريكا الجنوبية.",
-            "كندا": "تقع شمال الولايات المتحدة.",
-            "أمريكا": "عاصمتها واشنطن.",
-            "بريطانيا": "دولة جزرية أوروبية.",
-        }
-
-        clue = clues.get(
-            item["country"],
-            "دولة معروفة.",
+        country, aliases, code, clue = random.choice(FLAGS)
+        await self.text_round(
+            channel,
+            "🌍 خمن الدولة",
+            f"💡 التلميح: {clue}",
+            country,
+            aliases,
+            GUESS_TIME,
         )
-
-        self.active_games[channel.id]["answer"] = item["country"]
-        self.active_games[channel.id]["aliases"] = item["aliases"]
-
-        await channel.send(
-            embed=game_embed(
-                "🌍 خمن الدولة",
-                f"💡 تلميح:\n{clue}\n\n"
-                f"⏱️ {GUESS_TIME} ثانية.",
-            )
-        )
-
-        await asyncio.sleep(GUESS_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ انتهى الوقت!\n"
-                f"الإجابة: **{item['country']}**"
-            )
-
-
-    async def answer_guess_country(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if not matches_answer(
-            message.content,
-            game["answer"],
-            game.get("aliases"),
-        ):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 10 - GUESS DRAWING
     # ========================================================
-
     async def game_guess_drawing(self, channel):
-
         item = random.choice(DRAWINGS)
-
-        self.active_games[channel.id]["answer"] = item["answer"]
-        self.active_games[channel.id]["aliases"] = item["aliases"]
-
-        letter_count = len(
-            "".join(
-                item["answer"].split()
-            )
-        )
-
-        embed = game_embed(
+        await self.text_round(
+            channel,
             "🎨 خمن الرسمة",
-            "ما الموجود في الصورة؟\n\n"
-            f"🔤 عدد الحروف: **{letter_count}**\n\n"
-            f"⏱️ الوقت: **{GUESS_TIME} ثانية**",
+            f"ما الموجود في الصورة؟\n"
+            f"🔤 عدد الحروف: **{len(item['answer'].replace(' ', ''))}**",
+            item["answer"],
+            item["aliases"],
+            GUESS_TIME,
+            item["image"],
         )
-
-        embed.set_image(
-            url=item["image"]
-        )
-
-        await channel.send(
-            embed=embed
-        )
-
-        await asyncio.sleep(GUESS_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ انتهى الوقت!\n"
-                f"الإجابة: **{item['answer']}**"
-            )
-
-
-    async def answer_guess_drawing(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if not matches_answer(
-            message.content,
-            game["answer"],
-            game.get("aliases"),
-        ):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 11 - GUESS WORD
     # ========================================================
-
     async def game_guess_word(self, channel):
-
         word, aliases = random.choice(WORDS)
-
-        self.active_games[channel.id]["answer"] = word
-        self.active_games[channel.id]["aliases"] = aliases
-
-        await channel.send(
-            embed=game_embed(
-                "📝 خمن الكلمة",
-                f"الكلمة:\n\n"
-                f"{mask_word(word)}\n\n"
-                f"🔤 عدد الحروف: {len(word)}\n"
-                f"⏱️ {GUESS_TIME} ثانية.",
-            )
+        masked = " ".join(
+            "⬜" if not char.isspace() else " "
+            for char in word
         )
-
-        await asyncio.sleep(GUESS_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة كانت: **{word}**"
-            )
-
-
-    async def answer_guess_word(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
+        await self.text_round(
+            channel,
+            "📝 خمن الكلمة",
+            f"الكلمة:\n\n{masked}\n\n"
+            f"🔤 عدد الحروف: **{len(word)}**",
+            word,
+            aliases,
+            GUESS_TIME,
         )
-
-        if not game:
-            return
-
-        if not matches_answer(
-            message.content,
-            game["answer"],
-            game.get("aliases"),
-        ):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 12 - FAST CLICK
     # ========================================================
-
     async def game_fast_click(self, channel):
-
-        await channel.send(
-            "⚡ **استعد...**"
-        )
-
-        await asyncio.sleep(
-            random.uniform(2, 5)
-        )
-
+        await channel.send("⚡ استعد...")
+        await asyncio.sleep(random.uniform(2, 5))
         view = FastClickView()
-
         await channel.send(
-            embed=game_embed(
+            embed=embed(
                 "⚡ اضغط الآن!",
                 "أول شخص يضغط الزر يفوز.",
             ),
             view=view,
         )
-
         await view.wait()
-
         if view.winner:
-
-            await self.winner(
-                channel,
-                view.winner,
-            )
-
-
+            await self.winner(channel, view.winner)
+        else:
+            await channel.send("⏰ لم يضغط أحد في الوقت المحدد.")
     # ========================================================
     # GAME 13 - FAST TYPE
     # ========================================================
-
     async def game_fast_type(self, channel):
-
         text = random.choice([
-            "سرعة",
-            "ديسكورد",
-            "العاب",
-            "برمجة",
-            "بوت",
-            "مسابقة",
-            "تحدي",
-            "سرعة الكتابة",
+            "سرعة", "ديسكورد", "العاب", "برمجة",
+            "بوت", "مسابقة", "تحدي", "سرعة الكتابة",
         ])
-
-        self.active_games[channel.id]["answer"] = normalize(text)
-
-        await channel.send(
-            embed=game_embed(
-                "⌨️ الكتابة السريعة",
-                f"اكتب الكلمة بالضبط:\n\n"
-                f"**{text}**\n\n"
-                f"⏱️ {TEXT_GAME_TIME} ثانية.",
-            )
+        await self.text_round(
+            channel,
+            "⌨️ الكتابة السريعة",
+            f"اكتب الكلمة بالضبط:\n\n**{text}**",
+            text,
+            timeout=TEXT_GAME_TIME,
         )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ انتهى الوقت!\n"
-                f"الإجابة: **{text}**"
-            )
-
-
-    async def answer_fast_type(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if normalize(message.content) != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 14 - TEXT SPLIT
     # ========================================================
-
     async def game_text_split(self, channel):
-
         word = random.choice([
-            "ديسكورد",
-            "برمجة",
-            "مسابقة",
-            "روبوت",
-            "العاب",
-            "تحدي",
+            "ديسكورد", "برمجة", "مسابقة", "روبوت", "العاب", "تحدي",
         ])
-
         answer = " ".join(word)
-
-        self.active_games[channel.id]["answer"] = normalize(answer)
-
-        await channel.send(
-            embed=game_embed(
-                "✂️ فصل النص",
-                f"النص:\n\n"
-                f"**{word}**\n\n"
-                "افصل الحروف بمسافات.\n\n"
-                f"مثال:\n`{' '.join(word)}`\n\n"
-                f"⏱️ {TEXT_GAME_TIME} ثانية.",
-            )
+        await self.text_round(
+            channel,
+            "✂️ فصل النص",
+            f"افصل الحروف بمسافات:\n\n**{word}**\n\n"
+            f"مثال: `{answer}`",
+            answer,
+            timeout=TEXT_GAME_TIME,
         )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة:\n`{answer}`"
-            )
-
-
-    async def answer_text_split(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if normalize(message.content) != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 15 - MERGE TEXT
     # ========================================================
-
     async def game_merge_text(self, channel):
-
         word = random.choice([
             "د ي س ك و ر د",
             "ب ر م ج ة",
@@ -2491,654 +1348,210 @@ class GameSystem:
             "ا ل ع ا ب",
             "ت ح د ي",
         ])
-
         answer = word.replace(" ", "")
-
-        self.active_games[channel.id]["answer"] = normalize(answer)
-
-        await channel.send(
-            embed=game_embed(
-                "🔗 دمج النص",
-                f"ادمج الحروف:\n\n"
-                f"**{word}**\n\n"
-                f"⏱️ {TEXT_GAME_TIME} ثانية.",
-            )
+        await self.text_round(
+            channel,
+            "🔗 دمج النص",
+            f"ادمج الحروف:\n\n**{word}**",
+            answer,
+            timeout=TEXT_GAME_TIME,
         )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: **{answer}**"
-            )
-
-
-    async def answer_merge_text(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if normalize(message.content) != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 16 - GUESS FLAG
     # ========================================================
-
     async def game_guess_flag(self, channel):
-
-        item = random.choice(FLAGS)
-
-        self.active_games[channel.id]["answer"] = item["country"]
-        self.active_games[channel.id]["aliases"] = item["aliases"]
-
-        image_url = (
-            f"https://flagcdn.com/w640/{item['code']}.png"
-        )
-
-        embed = game_embed(
+        country, aliases, code, clue = random.choice(FLAGS)
+        await self.text_round(
+            channel,
             "🏳️ خمن العلم",
-            "ما الدولة صاحبة هذا العلم؟\n\n"
-            f"⏱️ {GUESS_TIME} ثانية.",
+            "ما الدولة صاحبة هذا العلم؟",
+            country,
+            aliases,
+            GUESS_TIME,
+            f"https://flagcdn.com/w640/{code}.png",
         )
-
-        embed.set_image(
-            url=image_url
-        )
-
-        await channel.send(
-            embed=embed
-        )
-
-        await asyncio.sleep(GUESS_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ انتهى الوقت!\n"
-                f"الإجابة: **{item['country']}**"
-            )
-
-
-    async def answer_guess_flag(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if not matches_answer(
-            message.content,
-            game["answer"],
-            game.get("aliases"),
-        ):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 17 - TEXT REVERSE
     # ========================================================
-
     async def game_text_reverse(self, channel):
-
-        text = random.choice([
-            "ديسكورد",
-            "العاب",
-            "مسابقة",
-            "برمجة",
-            "بوت",
-            "تحدي",
+        word = random.choice([
+            "ديسكورد", "العاب", "مسابقة", "برمجة", "بوت", "تحدي",
         ])
-
-        reversed_text = text[::-1]
-
-        self.active_games[channel.id]["answer"] = normalize(
-            reversed_text
+        reversed_word = word[::-1]
+        await self.text_round(
+            channel,
+            "🔄 عكس النص",
+            f"اعكس النص:\n\n**{word}**",
+            reversed_word,
+            timeout=TEXT_GAME_TIME,
         )
-
-        await channel.send(
-            embed=game_embed(
-                "🔄 عكس النص",
-                f"اعكس النص:\n\n"
-                f"**{text}**\n\n"
-                f"⏱️ {TEXT_GAME_TIME} ثانية.",
-            )
-        )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: **{reversed_text}**"
-            )
-
-
-    async def answer_text_reverse(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if normalize(message.content) != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 18 - FIND LETTER
     # ========================================================
-
     async def game_find_letter(self, channel):
-
-        letters = list(
-            "ابتثجحخدذرزسشصضطظعغفقكلمنهوي"
-        )
-
+        letters = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
         target = random.choice(letters)
-
-        other_letters = [
-            letter
-            for letter in letters
-            if letter != target
-        ]
-
+        other_letters = [x for x in letters if x != target]
         sequence = [
             random.choice(other_letters)
             for _ in range(49)
         ]
-
-        position = random.randint(0, 49)
-
-        sequence.insert(
-            position,
+        sequence.insert(random.randint(0, 49), target)
+        await self.text_round(
+            channel,
+            "🔤 ابحث عن الحرف",
+            f"الحرف المطلوب: **{target}**\n\n"
+            + " ".join(sequence),
             target,
+            timeout=TEXT_GAME_TIME,
         )
-
-        display = " ".join(sequence)
-
-        self.active_games[channel.id]["answer"] = normalize(
-            target
-        )
-
-        await channel.send(
-            embed=game_embed(
-                "🔤 ابحث عن الحرف",
-                f"الحرف المطلوب: **{target}**\n\n"
-                f"{display}\n\n"
-                "أرسل الحرف عندما تجده.",
-            )
-        )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ انتهى الوقت!\n"
-                f"الحرف كان: **{target}**"
-            )
-
-
-    async def answer_find_letter(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if normalize(message.content) != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 19 - CORRECT LETTER
     # ========================================================
-
     async def game_correct_letter(self, channel):
-
-        letters = list(
-            "ابتثجحخدذرزسشصضطظعغفقكلمنهوي"
-        )
-
+        letters = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
         target = random.choice(letters)
-
-        fake = random.choice([
-            letter
-            for letter in letters
-            if letter != target
-        ])
-
-        sequence = [
-            fake
-            for _ in range(30)
-        ]
-
+        fake = random.choice([x for x in letters if x != target])
+        sequence = [fake for _ in range(30)]
         correct_index = random.randrange(30)
-
         sequence[correct_index] = target
-
-        display = " ".join(sequence)
-
-        self.active_games[channel.id]["answer"] = str(
-            correct_index + 1
+        await self.text_round(
+            channel,
+            "✅ الحرف الصحيح",
+            f"الحرف المطلوب: **{target}**\n\n"
+            + " ".join(sequence)
+            + "\n\nأرسل رقم مكانه من 1 إلى 30.",
+            str(correct_index + 1),
+            timeout=TEXT_GAME_TIME,
         )
-
-        await channel.send(
-            embed=game_embed(
-                "✅ الحرف الصحيح",
-                f"الحرف المطلوب: **{target}**\n\n"
-                f"{display}\n\n"
-                "أرسل رقم مكانه من **1 إلى 30**.",
-            )
-        )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: **{correct_index + 1}**"
-            )
-
-
-    async def answer_correct_letter(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if message.content.strip() != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 20 - SORT NUMBERS
     # ========================================================
-
     async def game_sort_numbers(self, channel):
-
-        numbers = random.sample(
-            range(1, 50),
-            6,
-        )
-
+        numbers = random.sample(range(1, 50), 6)
         scrambled = numbers[:]
-
         random.shuffle(scrambled)
-
-        answer = " ".join(
-            str(number)
-            for number in sorted(numbers)
+        answer = " ".join(str(n) for n in sorted(numbers))
+        await self.text_round(
+            channel,
+            "🔢 ترتيب الأرقام",
+            "رتب الأرقام من الأصغر إلى الأكبر:\n\n"
+            + " — ".join(str(n) for n in scrambled)
+            + "\n\nمثال: `1 2 3 4 5 6`",
+            answer,
+            timeout=TEXT_GAME_TIME,
         )
-
-        self.active_games[channel.id]["answer"] = answer
-
-        await channel.send(
-            embed=game_embed(
-                "🔢 ترتيب الأرقام",
-                f"رتب من الأصغر إلى الأكبر:\n\n"
-                f"**{' - '.join(map(str, scrambled))}**\n\n"
-                "مثال: `1 2 3 4 5 6`\n\n"
-                f"⏱️ {TEXT_GAME_TIME} ثانية.",
-            )
-        )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: `{answer}`"
-            )
-
-
-    async def answer_sort_numbers(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        content = " ".join(
-            message.content.strip().split()
-        )
-
-        if content != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 21 - GUESS COLOR
     # ========================================================
-
     async def game_guess_color(self, channel):
-
-        color = random.choice(COLORS)
-
-        name = color[0]
-        aliases = color[1]
-        emoji = color[2]
-
-        self.active_games[channel.id]["answer"] = name
-        self.active_games[channel.id]["aliases"] = aliases
-
-        await channel.send(
-            embed=game_embed(
-                "🎨 خمن اللون",
-                f"اللون الظاهر:\n\n"
-                f"# {emoji}\n\n"
-                "اكتب اسم اللون.\n\n"
-                f"⏱️ {GUESS_TIME} ثانية.",
-            )
+        name, aliases, emoji = random.choice(COLORS)
+        await self.text_round(
+            channel,
+            "🎨 خمن اللون",
+            f"اللون الظاهر:\n\n# {emoji}\n\nاكتب اسم اللون.",
+            name,
+            aliases,
+            GUESS_TIME,
         )
-
-        await asyncio.sleep(GUESS_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: **{name}**"
-            )
-
-
-    async def answer_guess_color(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if not matches_answer(
-            message.content,
-            game["answer"],
-            game.get("aliases"),
-        ):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 22 - FIND EMOJI
     # ========================================================
-
     async def game_find_emoji(self, channel):
-
         emojis = [
-            "😀",
-            "😂",
-            "😎",
-            "🤖",
-            "🐱",
-            "🐶",
-            "🍎",
-            "🍕",
-            "⚽",
-            "🔥",
+            "😀", "😂", "😎", "🤖", "🐱",
+            "🐶", "🍎", "🍕", "⚽", "🔥",
         ]
-
         target = random.choice(emojis)
-
-        others = [
-            emoji
-            for emoji in emojis
-            if emoji != target
-        ]
-
-        sequence = [
-            random.choice(others)
-            for _ in range(49)
-        ]
-
-        position = random.randint(0, 49)
-
-        sequence.insert(
-            position,
+        others = [x for x in emojis if x != target]
+        sequence = [random.choice(others) for _ in range(49)]
+        sequence.insert(random.randint(0, 49), target)
+        await self.text_round(
+            channel,
+            "🔎 ابحث عن الإيموجي",
+            f"الإيموجي المطلوب: **{target}**\n\n"
+            + " ".join(sequence),
             target,
+            timeout=TEXT_GAME_TIME,
         )
-
-        display = " ".join(sequence)
-
-        self.active_games[channel.id]["answer"] = target
-
-        await channel.send(
-            embed=game_embed(
-                "🔎 ابحث عن الإيموجي",
-                f"الإيموجي المطلوب: **{target}**\n\n"
-                f"{display}\n\n"
-                "أرسل الإيموجي عندما تجده.",
-            )
-        )
-
-        await asyncio.sleep(TEXT_GAME_TIME)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: **{target}**"
-            )
-
-
-    async def answer_find_emoji(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if message.content.strip() != game["answer"]:
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
     # ========================================================
     # GAME 23 - TEXT REVEAL
     # ========================================================
-
     async def game_text_reveal(self, channel):
-
         word, aliases = random.choice(WORDS)
-
-        self.active_games[channel.id]["answer"] = word
-        self.active_games[channel.id]["aliases"] = aliases
-
-        revealed = set()
-
+        visible = set()
+        state = self.active_games.get(channel.id)
+        if not state:
+            return
+        state["answer"] = word
+        state["aliases"] = aliases
+        state["winner"] = None
+        state["ended"] = asyncio.Event()
+        def masked():
+            output = []
+            for index, char in enumerate(word):
+                if char.isspace():
+                    output.append(" ")
+                elif index in visible:
+                    output.append(char)
+                else:
+                    output.append("⬜")
+            return " ".join(output)
         message = await channel.send(
-            embed=game_embed(
+            embed=embed(
                 "👁️ كشف النص",
-                f"الكلمة تحتوي على "
-                f"**{len(word)} حروف**.\n\n"
-                f"{mask_reveal(word, revealed)}\n\n"
+                f"الكلمة تحتوي على **{len(word)} حروف**.\n\n"
+                f"{masked()}\n\n"
                 "سيتم كشف حروف تدريجيًا.",
             )
         )
-
         reveal_count = min(
             3,
-            len([
-                char
-                for char in word
-                if not char.isspace()
-            ]),
+            len([c for c in word if not c.isspace()]),
         )
-
         for _ in range(reveal_count):
-
-            await asyncio.sleep(5)
-
-            if channel.id not in self.active_games:
+            try:
+                await asyncio.wait_for(
+                    state["ended"].wait(),
+                    timeout=5,
+                )
+                break
+            except asyncio.TimeoutError:
+                pass
+            if self.active_games.get(channel.id) is not state:
                 return
-
             available = [
-                index
-                for index in range(len(word))
-                if not word[index].isspace()
-                and index not in revealed
+                i for i, char in enumerate(word)
+                if not char.isspace() and i not in visible
             ]
-
             if not available:
                 break
-
-            revealed.add(
-                random.choice(available)
-            )
-
-            await message.edit(
-                embed=game_embed(
-                    "👁️ كشف النص",
-                    f"الكلمة تحتوي على "
-                    f"**{len(word)} حروف**.\n\n"
-                    f"{mask_reveal(word, revealed)}\n\n"
-                    "💡 حاول التخمين!",
+            visible.add(random.choice(available))
+            try:
+                await message.edit(
+                    embed=embed(
+                        "👁️ كشف النص",
+                        f"الكلمة تحتوي على **{len(word)} حروف**.\n\n"
+                        f"{masked()}\n\n"
+                        "💡 حاول التخمين!",
+                    )
                 )
-            )
-
-        remaining = max(
-            0,
-            TEXT_GAME_TIME - (reveal_count * 5),
-        )
-
-        if remaining:
-            await asyncio.sleep(remaining)
-
-        if channel.id in self.active_games:
-
-            await channel.send(
-                f"⏰ الإجابة: **{word}**"
-            )
-
-
-    async def answer_text_reveal(self, message):
-
-        game = self.active_games.get(
-            message.channel.id
-        )
-
-        if not game:
-            return
-
-        if not matches_answer(
-            message.content,
-            game["answer"],
-            game.get("aliases"),
-        ):
-            return
-
-        await self.winner(
-            message.channel,
-            message.author,
-        )
-
-        self.active_games.pop(
-            message.channel.id,
-            None,
-        )
-
-
+            except discord.HTTPException:
+                pass
+        if not state["ended"].is_set():
+            try:
+                await asyncio.wait_for(
+                    state["ended"].wait(),
+                    timeout=max(1, TEXT_GAME_TIME - reveal_count * 5),
+                )
+            except asyncio.TimeoutError:
+                pass
+        winner = state.get("winner")
+        if winner:
+            await self.winner(channel, winner)
+        else:
+            await channel.send(f"⏰ الإجابة: **{word}**")
 # ============================================================
 # EXPORT
 # ============================================================
-
-__all__ = [
-    "GameSystem",
-]
+__all__ = ["GameSystem"]
