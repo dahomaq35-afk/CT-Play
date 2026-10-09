@@ -16,10 +16,12 @@ from discord import app_commands
 from discord.ext import commands
 
 try:
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
 except ImportError:
     Image = None
     ImageDraw = None
+    ImageFilter = None
+    ImageEnhance = None
 
 try:
     import config as cfg
@@ -121,34 +123,20 @@ WORDS = [
     ("هاتف", ["جوال", "phone"]),
 ]
 
-# الرسومات تنشأ داخل البوت ولا تعتمد على صور من مواقع خارجية.
 DRAWINGS = [
     {"answer": "تفاحة", "aliases": ["تفاح", "apple"], "kind": "apple"},
     {"answer": "قطة", "aliases": ["قط", "بس", "cat"], "kind": "cat"},
     {"answer": "كلب", "aliases": ["dog"], "kind": "dog"},
     {"answer": "بيتزا", "aliases": ["pizza"], "kind": "pizza"},
     {"answer": "سيارة", "aliases": ["سياره", "car"], "kind": "car"},
-    {
-        "answer": "طائرة",
-        "aliases": ["طياره", "plane", "airplane"],
-        "kind": "airplane",
-    },
-    {
-        "answer": "دراجة",
-        "aliases": ["دراجه", "bike", "bicycle"],
-        "kind": "bicycle",
-    },
-    {
-        "answer": "كرة",
-        "aliases": ["كره", "ball", "football"],
-        "kind": "ball",
-    },
+    {"answer": "طائرة", "aliases": ["طياره", "plane", "airplane"], "kind": "airplane"},
+    {"answer": "دراجة", "aliases": ["دراجه", "bike", "bicycle"], "kind": "bicycle"},
+    {"answer": "كرة", "aliases": ["كره", "ball", "football"], "kind": "ball"},
     {"answer": "شجرة", "aliases": ["شجره", "tree"], "kind": "tree"},
     {"answer": "بيت", "aliases": ["house"], "kind": "house"},
     {"answer": "سمكة", "aliases": ["سمكه", "fish"], "kind": "fish"},
 ]
 
-# لا توجد الإمارات أو إيران أو اليمن أو إسرائيل ضمن هذه القائمة.
 FLAGS = [
     ("السعودية", ["السعوديه", "saudi", "saudi arabia"], "sa", "تقع في شبه الجزيرة العربية."),
     ("الكويت", ["kuwait"], "kw", "دولة خليجية."),
@@ -232,8 +220,12 @@ def embed(title, description, color=None):
     )
 
 
+# ============================================================
+# HARD-TO-GUESS DRAWING GENERATOR
+# ============================================================
+
 def make_drawing_file(kind):
-    """إنشاء رسمة PNG محليًا باستخدام Pillow."""
+    """ينشئ رسمة محلية متغيرة ومشوّشة باستخدام Pillow."""
     if Image is None or ImageDraw is None:
         raise RuntimeError(
             "مكتبة Pillow غير مثبتة. أضف Pillow إلى requirements.txt."
@@ -241,195 +233,248 @@ def make_drawing_file(kind):
 
     size = 512
     background_colors = [
-        (250, 247, 239),
-        (239, 247, 250),
-        (245, 242, 252),
-        (242, 249, 238),
-        (255, 244, 235),
+        (238, 235, 229),
+        (225, 237, 240),
+        (231, 225, 240),
+        (231, 238, 224),
+        (244, 226, 216),
+        (230, 230, 230),
+        (219, 225, 234),
     ]
-
-    image = Image.new(
-        "RGB",
-        (size, size),
-        random.choice(background_colors),
-    )
-    draw = ImageDraw.Draw(image)
-
-    # إطار وخطوط زخرفية تتغير مع كل صورة.
-    line_color = (70, 75, 90)
-    draw.rounded_rectangle(
-        (18, 18, 494, 494),
-        radius=28,
-        outline=(220, 220, 220),
-        width=3,
-    )
-
-    accent = random.choice([
+    line_colors = [
+        (40, 45, 55),
+        (65, 50, 65),
+        (45, 65, 70),
+        (75, 60, 45),
+        (55, 55, 55),
+    ]
+    accent_colors = [
         (231, 76, 60),
         (46, 134, 193),
         (39, 174, 96),
         (142, 68, 173),
         (230, 126, 34),
-    ])
+        (225, 180, 40),
+        (35, 155, 145),
+        (190, 70, 130),
+    ]
 
-    def line(points, fill=line_color, width=8):
-        draw.line(points, fill=fill, width=width, joint="curve")
+    image = Image.new("RGB", (size, size), random.choice(background_colors))
+    draw = ImageDraw.Draw(image)
+    outline = random.choice(line_colors)
+    accent = random.choice(accent_colors)
+    second_accent = random.choice(accent_colors)
 
-    def ellipse(box, fill, outline=line_color, width=7):
-        draw.ellipse(box, fill=fill, outline=outline, width=width)
+    scale = random.uniform(0.70, 1.08)
+    dx = random.randint(-45, 45)
+    dy = random.randint(-40, 40)
 
-    def polygon(points, fill, outline=line_color):
-        draw.polygon(points, fill=fill)
-        draw.line(points + [points[0]], fill=outline, width=7, joint="curve")
+    def point(x, y):
+        return (
+            int(256 + (x - 256) * scale + dx),
+            int(256 + (y - 256) * scale + dy),
+        )
 
-    # إزاحة بسيطة لجعل شكل الرسمة متغيرًا في كل مرة.
-    dx = random.randint(-12, 12)
-    dy = random.randint(-10, 10)
+    def box(x1, y1, x2, y2):
+        return point(x1, y1) + point(x2, y2)
+
+    def line(points, fill=None, width=8):
+        transformed = [point(x, y) for x, y in points]
+        draw.line(
+            transformed,
+            fill=fill or outline,
+            width=max(2, int(width * random.uniform(0.65, 1.3))),
+            joint="curve",
+        )
+
+    def ellipse(coords, fill, outline_color=None, width=7):
+        draw.ellipse(
+            box(*coords),
+            fill=fill,
+            outline=outline_color or outline,
+            width=max(2, int(width * random.uniform(0.7, 1.3))),
+        )
+
+    def polygon(points, fill, outline_color=None):
+        transformed = [point(x, y) for x, y in points]
+        draw.polygon(transformed, fill=fill)
+        draw.line(
+            transformed + [transformed[0]],
+            fill=outline_color or outline,
+            width=random.randint(4, 10),
+            joint="curve",
+        )
 
     if kind == "apple":
-        ellipse((155 + dx, 185 + dy, 270 + dx, 335 + dy), (225, 55, 55))
-        ellipse((240 + dx, 185 + dy, 355 + dx, 335 + dy), (225, 55, 55))
-        draw.rectangle((224 + dx, 160 + dy, 284 + dx, 215 + dy), fill=(225, 55, 55))
-        line([(255 + dx, 195 + dy), (265 + dx, 135 + dy)], (105, 65, 35), 12)
-        ellipse((266 + dx, 133 + dy, 330 + dx, 165 + dy), (55, 160, 80), width=4)
+        ellipse((155, 185, 270, 335), random.choice([(210, 65, 65), accent]))
+        ellipse((240, 185, 355, 335), random.choice([(210, 65, 65), accent]))
+        line([(255, 195), (265, 135)], (105, 65, 35), 12)
+        ellipse((266, 133, 330, 165), (55, 160, 80), width=4)
 
     elif kind == "cat":
-        polygon([(145 + dx, 200 + dy), (155 + dx, 110 + dy), (220 + dx, 170 + dy)], (245, 190, 120))
-        polygon([(292 + dx, 170 + dy), (365 + dx, 110 + dy), (370 + dx, 205 + dy)], (245, 190, 120))
-        ellipse((145 + dx, 155 + dy, 370 + dx, 370 + dy), (245, 190, 120))
-        ellipse((195 + dx, 225 + dy, 220 + dx, 250 + dy), (40, 40, 40), width=2)
-        ellipse((295 + dx, 225 + dy, 320 + dx, 250 + dy), (40, 40, 40), width=2)
-        polygon([(244 + dx, 265 + dy), (270 + dx, 265 + dy), (257 + dx, 280 + dy)], (220, 90, 100))
-        line([(257 + dx, 280 + dy), (257 + dx, 294 + dy)], width=4)
-        line([(230 + dx, 295 + dy), (185 + dx, 285 + dy)], width=4)
-        line([(285 + dx, 295 + dy), (330 + dx, 285 + dy)], width=4)
+        polygon([(145, 200), (155, 110), (220, 170)], (220, 170, 115))
+        polygon([(292, 170), (365, 110), (370, 205)], (220, 170, 115))
+        ellipse((145, 155, 370, 370), (220, 170, 115))
+        ellipse((195, 225, 220, 250), (40, 40, 40), width=2)
+        ellipse((295, 225, 320, 250), (40, 40, 40), width=2)
+        polygon([(244, 265), (270, 265), (257, 280)], (220, 90, 100))
+        line([(257, 280), (257, 294)], width=4)
+        line([(230, 295), (185, 285)], width=4)
+        line([(285, 295), (330, 285)], width=4)
 
     elif kind == "dog":
-        ellipse((150 + dx, 150 + dy, 360 + dx, 360 + dy), (210, 160, 105))
-        ellipse((130 + dx, 180 + dy, 190 + dx, 300 + dy), (145, 95, 55))
-        ellipse((320 + dx, 180 + dy, 380 + dx, 300 + dy), (145, 95, 55))
-        ellipse((195 + dx, 225 + dy, 220 + dx, 250 + dy), (30, 30, 30), width=2)
-        ellipse((290 + dx, 225 + dy, 315 + dx, 250 + dy), (30, 30, 30), width=2)
-        ellipse((225 + dx, 265 + dy, 285 + dx, 310 + dy), (245, 225, 195))
-        ellipse((243 + dx, 270 + dy, 270 + dx, 290 + dy), (30, 30, 30), width=2)
+        ellipse((150, 150, 360, 360), (190, 140, 90))
+        ellipse((130, 180, 190, 300), (130, 85, 55))
+        ellipse((320, 180, 380, 300), (130, 85, 55))
+        ellipse((195, 225, 220, 250), (30, 30, 30), width=2)
+        ellipse((290, 225, 315, 250), (30, 30, 30), width=2)
+        ellipse((225, 265, 285, 310), (240, 215, 185))
+        ellipse((243, 270, 270, 290), (30, 30, 30), width=2)
 
     elif kind == "pizza":
-        polygon(
-            [(120 + dx, 125 + dy), (395 + dx, 170 + dy), (245 + dx, 390 + dy)],
-            (247, 195, 95),
-        )
-        line([(120 + dx, 125 + dy), (395 + dx, 170 + dy)], (170, 95, 40), 18)
+        polygon([(120, 125), (395, 170), (245, 390)], (235, 180, 80))
+        line([(120, 125), (395, 170)], (155, 90, 40), 18)
         for px, py in [
-            (225 + dx, 190 + dy),
-            (310 + dx, 205 + dy),
-            (270 + dx, 260 + dy),
-            (235 + dx, 310 + dy),
-            (335 + dx, 235 + dy),
+            (225, 190), (310, 205), (270, 260),
+            (235, 310), (335, 235),
         ]:
-            ellipse((px, py, px + 28, py + 28), (205, 50, 45), width=3)
+            ellipse((px, py, px + 28, py + 28), (195, 45, 45), width=3)
 
     elif kind == "car":
         draw.rounded_rectangle(
-            (95 + dx, 220 + dy, 420 + dx, 335 + dy),
-            radius=24,
+            box(95, 220, 420, 335),
+            radius=random.randint(12, 30),
             fill=accent,
-            outline=line_color,
+            outline=outline,
             width=7,
         )
         polygon(
-            [
-                (155 + dx, 220 + dy),
-                (205 + dx, 155 + dy),
-                (320 + dx, 155 + dy),
-                (365 + dx, 220 + dy),
-            ],
-            (120, 200, 230),
+            [(155, 220), (205, 155), (320, 155), (365, 220)],
+            (110, 180, 205),
         )
-        ellipse((135 + dx, 305 + dy, 205 + dx, 375 + dy), (45, 45, 50))
-        ellipse((315 + dx, 305 + dy, 385 + dx, 375 + dy), (45, 45, 50))
-        ellipse((155 + dx, 325 + dy, 185 + dx, 355 + dy), (220, 220, 220), width=3)
-        ellipse((335 + dx, 325 + dy, 365 + dx, 355 + dy), (220, 220, 220), width=3)
+        ellipse((135, 305, 205, 375), (45, 45, 50))
+        ellipse((315, 305, 385, 375), (45, 45, 50))
+        ellipse((155, 325, 185, 355), (210, 210, 210), width=3)
+        ellipse((335, 325, 365, 355), (210, 210, 210), width=3)
 
     elif kind == "airplane":
         polygon(
             [
-                (250 + dx, 95 + dy),
-                (285 + dx, 220 + dy),
-                (400 + dx, 290 + dy),
-                (395 + dx, 320 + dy),
-                (280 + dx, 285 + dy),
-                (280 + dx, 375 + dy),
-                (330 + dx, 410 + dy),
-                (330 + dx, 430 + dy),
-                (250 + dx, 405 + dy),
-                (170 + dx, 430 + dy),
-                (170 + dx, 410 + dy),
-                (220 + dx, 375 + dy),
-                (220 + dx, 285 + dy),
-                (105 + dx, 320 + dy),
-                (100 + dx, 290 + dy),
-                (215 + dx, 220 + dy),
+                (250, 95), (285, 220), (400, 290), (395, 320),
+                (280, 285), (280, 375), (330, 410), (330, 430),
+                (250, 405), (170, 430), (170, 410), (220, 375),
+                (220, 285), (105, 320), (100, 290), (215, 220),
             ],
-            (220, 225, 235),
+            (205, 215, 225),
         )
 
     elif kind == "bicycle":
-        ellipse((95 + dx, 280 + dy, 215 + dx, 400 + dy), None, width=8)
-        ellipse((300 + dx, 280 + dy, 420 + dx, 400 + dy), None, width=8)
-        line([(155 + dx, 340 + dy), (240 + dx, 240 + dy), (350 + dx, 340 + dy), (155 + dx, 340 + dy)], accent, 9)
-        line([(240 + dx, 240 + dy), (275 + dx, 340 + dy)], accent, 9)
-        line([(250 + dx, 235 + dy), (290 + dx, 235 + dy)], width=8)
-        line([(150 + dx, 335 + dy), (140 + dx, 310 + dy)], width=7)
-        line([(335 + dx, 340 + dy), (360 + dx, 240 + dy)], width=8)
+        ellipse((95, 280, 215, 400), None, width=8)
+        ellipse((300, 280, 420, 400), None, width=8)
+        line([(155, 340), (240, 240), (350, 340), (155, 340)], accent, 9)
+        line([(240, 240), (275, 340)], accent, 9)
+        line([(250, 235), (290, 235)], width=8)
+        line([(150, 335), (140, 310)], width=7)
+        line([(335, 340), (360, 240)], width=8)
 
     elif kind == "ball":
-        ellipse((115 + dx, 115 + dy, 395 + dx, 395 + dy), (245, 245, 245), width=8)
-        polygon([(235 + dx, 195 + dy), (280 + dx, 205 + dy), (300 + dx, 250 + dy), (265 + dx, 285 + dy), (220 + dx, 260 + dy)], (40, 40, 45))
-        line([(235 + dx, 195 + dy), (185 + dx, 155 + dy)], width=5)
-        line([(280 + dx, 205 + dy), (350 + dx, 180 + dy)], width=5)
-        line([(300 + dx, 250 + dy), (365 + dx, 280 + dy)], width=5)
-        line([(265 + dx, 285 + dy), (260 + dx, 355 + dy)], width=5)
-        line([(220 + dx, 260 + dy), (155 + dx, 300 + dy)], width=5)
+        ellipse((115, 115, 395, 395), (230, 230, 230), width=8)
+        polygon(
+            [(235, 195), (280, 205), (300, 250), (265, 285), (220, 260)],
+            (40, 40, 45),
+        )
+        line([(235, 195), (185, 155)], width=5)
+        line([(280, 205), (350, 180)], width=5)
+        line([(300, 250), (365, 280)], width=5)
+        line([(265, 285), (260, 355)], width=5)
+        line([(220, 260), (155, 300)], width=5)
 
     elif kind == "tree":
-        draw.rectangle((225 + dx, 280 + dy, 290 + dx, 415 + dy), fill=(135, 85, 45), outline=line_color, width=5)
-        ellipse((125 + dx, 125 + dy, 280 + dx, 300 + dy), (65, 165, 85))
-        ellipse((225 + dx, 100 + dy, 375 + dx, 285 + dy), (50, 145, 75))
-        ellipse((175 + dx, 180 + dy, 340 + dx, 330 + dy), (75, 180, 90))
+        draw.rectangle(
+            box(225, 280, 290, 415),
+            fill=(125, 80, 45),
+            outline=outline,
+            width=5,
+        )
+        ellipse((125, 125, 280, 300), (65, 145, 80))
+        ellipse((225, 100, 375, 285), (50, 125, 70))
+        ellipse((175, 180, 340, 330), (75, 160, 85))
 
     elif kind == "house":
-        draw.rectangle((135 + dx, 220 + dy, 375 + dx, 405 + dy), fill=(240, 205, 145), outline=line_color, width=7)
-        polygon(
-            [(110 + dx, 225 + dy), (255 + dx, 100 + dy), (400 + dx, 225 + dy)],
-            (190, 70, 60),
+        draw.rectangle(
+            box(135, 220, 375, 405),
+            fill=(225, 190, 130),
+            outline=outline,
+            width=7,
         )
-        draw.rectangle((225 + dx, 305 + dy, 290 + dx, 405 + dy), fill=(120, 80, 50), outline=line_color, width=5)
-        draw.rectangle((155 + dx, 260 + dy, 205 + dx, 310 + dy), fill=(130, 210, 240), outline=line_color, width=4)
-        draw.rectangle((310 + dx, 260 + dy, 355 + dx, 310 + dy), fill=(130, 210, 240), outline=line_color, width=4)
+        polygon([(110, 225), (255, 100), (400, 225)], (170, 65, 60))
+        draw.rectangle(
+            box(225, 305, 290, 405),
+            fill=(110, 75, 50),
+            outline=outline,
+            width=5,
+        )
+        draw.rectangle(
+            box(155, 260, 205, 310),
+            fill=(120, 190, 220),
+            outline=outline,
+            width=4,
+        )
+        draw.rectangle(
+            box(310, 260, 355, 310),
+            fill=(120, 190, 220),
+            outline=outline,
+            width=4,
+        )
 
     elif kind == "fish":
-        ellipse((120 + dx, 180 + dy, 365 + dx, 335 + dy), (90, 180, 225))
-        polygon(
-            [(360 + dx, 255 + dy), (425 + dx, 195 + dy), (425 + dx, 315 + dy)],
-            (245, 165, 70),
-        )
-        ellipse((165 + dx, 220 + dy, 195 + dx, 250 + dy), (30, 30, 30), width=2)
-        line([(220 + dx, 205 + dy), (250 + dx, 255 + dy), (220 + dx, 305 + dy)], (50, 135, 185), 6)
+        ellipse((120, 180, 365, 335), (75, 160, 205))
+        polygon([(360, 255), (425, 195), (425, 315)], (230, 150, 65))
+        ellipse((165, 220, 195, 250), (30, 30, 30), width=2)
+        line([(220, 205), (250, 255), (220, 305)], (45, 120, 175), 6)
 
-    # نقاط زخرفية عشوائية تعطي كل صورة اختلافًا.
-    for _ in range(12):
-        px = random.randint(40, 470)
-        py = random.randint(40, 470)
-        radius = random.randint(2, 5)
-        draw.ellipse(
-            (px, py, px + radius * 2, py + radius * 2),
-            fill=accent,
+    # تخفيض الدقة ثم تكبير الصورة.
+    low_size = random.choice([64, 72, 80, 96, 112])
+    image = image.resize((low_size, low_size), Image.Resampling.BILINEAR)
+    image = image.resize((size, size), Image.Resampling.BICUBIC)
+
+    if ImageFilter is not None and random.random() < 0.85:
+        image = image.filter(
+            ImageFilter.GaussianBlur(random.uniform(1.0, 3.5))
         )
+
+    if ImageEnhance is not None:
+        image = ImageEnhance.Contrast(image).enhance(random.uniform(0.55, 0.9))
+        image = ImageEnhance.Color(image).enhance(random.uniform(0.45, 0.9))
+        image = ImageEnhance.Brightness(image).enhance(random.uniform(0.85, 1.12))
+
+    # خربشات عشوائية مع الحفاظ على ظهور الشكل بشكل عام.
+    overlay = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    scribble = ImageDraw.Draw(overlay)
+
+    for _ in range(random.randint(35, 75)):
+        x1 = random.randint(-40, size)
+        y1 = random.randint(-40, size)
+        x2 = x1 + random.randint(-160, 160)
+        y2 = y1 + random.randint(-160, 160)
+
+        color = random.choice([
+            (*accent, random.randint(25, 95)),
+            (*second_accent, random.randint(25, 90)),
+            (30, 35, 45, random.randint(20, 75)),
+        ])
+
+        scribble.line(
+            (x1, y1, x2, y2),
+            fill=color,
+            width=random.randint(1, 5),
+        )
+
+    image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
     output = io.BytesIO()
     image.save(output, format="PNG")
     output.seek(0)
-
     return discord.File(output, filename="game_drawing.png")
 
 
@@ -563,8 +608,7 @@ class WheelActionSelect(discord.ui.Select):
         if view.round_number < ready_round:
             remaining = ready_round - view.round_number
             await interaction.response.send_message(
-                f"⏳ هذا الخيار في فترة انتظار. "
-                f"يمكنك استخدامه بعد {remaining} جولة.",
+                f"⏳ هذا الخيار في فترة انتظار. يمكن استخدامه بعد {remaining} جولة.",
                 ephemeral=True,
             )
             return
@@ -585,8 +629,6 @@ class WheelActionSelect(discord.ui.Select):
             target = random.choice(candidates)
             view.chosen_action = "random"
             view.target = target
-
-            # لا يمكن استخدام هذا الخيار في الجولتين التاليتين.
             view.action_ready_round["random"] = view.round_number + 3
 
             await interaction.response.send_message(
@@ -599,7 +641,6 @@ class WheelActionSelect(discord.ui.Select):
         if action == "choose":
             view.chosen_action = "choose"
             view.action_ready_round["choose"] = view.round_number + 3
-
             target_view = WheelTargetView(view, candidates)
 
             await interaction.response.send_message(
@@ -616,23 +657,14 @@ class WheelActionSelect(discord.ui.Select):
 
 
 class WheelActionView(discord.ui.View):
-    def __init__(
-        self,
-        players,
-        selected_player,
-        round_number,
-        action_ready_round,
-    ):
+    def __init__(self, players, selected_player, round_number, action_ready_round):
         super().__init__(timeout=60)
-
         self.players = players
         self.selected_player = selected_player
         self.round_number = round_number
         self.action_ready_round = action_ready_round
-
         self.chosen_action = None
         self.target = None
-
         self.add_item(WheelActionSelect(self))
 
 
@@ -700,7 +732,6 @@ class WheelTargetView(discord.ui.View):
         self.candidates = candidates
         self.page = 0
         self.max_pages = max(1, (len(candidates) + 24) // 25)
-
         self._refresh_items()
 
     def _refresh_items(self):
@@ -751,7 +782,6 @@ class WheelTargetView(discord.ui.View):
 
             previous_button.callback = previous_callback
             next_button.callback = next_callback
-
             self.add_item(previous_button)
             self.add_item(next_button)
 
@@ -777,9 +807,12 @@ class GameSystem:
     # ========================================================
 
     def pick_nonrepeating(self, channel, key, items):
-        """يمنع تكرار العنصر في الروم حتى تُستخدم جميع العناصر."""
-        pool_key = (getattr(channel, "guild", None).id if getattr(channel, "guild", None) else 0,
-                    channel.id, key)
+        guild = getattr(channel, "guild", None)
+        pool_key = (
+            guild.id if guild else 0,
+            channel.id,
+            key,
+        )
 
         used = self.used_items.setdefault(pool_key, set())
         available = [
@@ -884,12 +917,7 @@ class GameSystem:
             channel: discord.TextChannel,
             role: discord.Role,
         ):
-            await self.slash_setupgames(
-                interaction,
-                int(slot),
-                channel,
-                role,
-            )
+            await self.slash_setupgames(interaction, int(slot), channel, role)
 
         async def setexploitlog_callback(
             interaction: discord.Interaction,
@@ -950,14 +978,12 @@ class GameSystem:
 
         try:
             rows = self.bot.database.get_setups(guild_id)
-
             for row in rows:
                 slot = int(row["slot"])
                 setups[slot] = {
                     "channel_id": int(row["channel_id"]),
                     "role_id": int(row["role_id"]),
                 }
-
         except Exception:
             traceback.print_exc()
 
@@ -990,7 +1016,6 @@ class GameSystem:
             "channel_id": int(channel_id),
             "role_id": int(role_id),
         }
-
         return True
 
     # ========================================================
@@ -1002,7 +1027,6 @@ class GameSystem:
             return True
 
         setups = self.load_setups(guild_id)
-
         if not setups:
             return False
 
@@ -1054,7 +1078,6 @@ class GameSystem:
             traceback.print_exc()
 
         log_channel_id = None
-
         try:
             log_channel_id = self.bot.database.get_log_channel(guild.id)
         except Exception:
@@ -1067,7 +1090,6 @@ class GameSystem:
             return
 
         log_channel = guild.get_channel(int(log_channel_id))
-
         if log_channel is None:
             try:
                 log_channel = await self.bot.fetch_channel(int(log_channel_id))
@@ -1105,18 +1127,12 @@ class GameSystem:
             await ctx.send("❌ الألعاب تعمل داخل السيرفر فقط.")
             return
 
-        if not self.can_use_games(
-            ctx.guild.id,
-            ctx.channel.id,
-            ctx.author,
-        ):
+        if not self.can_use_games(ctx.guild.id, ctx.channel.id, ctx.author):
             setups = self.load_setups(ctx.guild.id)
-
             channel_has_setup = any(
                 setup["channel_id"] == ctx.channel.id
                 for setup in setups.values()
             )
-
             reason = (
                 "لا يملك الرتبة المطلوبة"
                 if channel_has_setup
@@ -1130,7 +1146,6 @@ class GameSystem:
                 game_key,
                 reason,
             )
-
             await ctx.send(
                 "❌ ما عندك الصلاحية المطلوبة لتشغيل الألعاب في هذا الروم."
             )
@@ -1149,25 +1164,20 @@ class GameSystem:
             "aliases": [],
             "winner": None,
         }
-
         self.active_games[ctx.channel.id] = state
-        task = asyncio.create_task(self._run_game(ctx, game_key))
-        state["task"] = task
+        state["task"] = asyncio.create_task(self._run_game(ctx, game_key))
 
     async def _run_game(self, ctx, game_key):
         channel_id = ctx.channel.id
         state = self.active_games.get(channel_id)
-
         if not state:
             return
 
         try:
             method = getattr(self, f"game_{game_key}", None)
-
             if method is None:
                 await ctx.send("❌ اللعبة غير موجودة.")
                 return
-
             await method(ctx.channel)
 
         except asyncio.CancelledError:
@@ -1180,7 +1190,6 @@ class GameSystem:
         except Exception as error:
             print(f"[GAME ERROR] {game_key}: {error}")
             traceback.print_exc()
-
             try:
                 await ctx.send("❌ حدث خطأ أثناء اللعبة.")
             except discord.HTTPException:
@@ -1188,7 +1197,6 @@ class GameSystem:
 
         finally:
             current = self.active_games.get(channel_id)
-
             if current is state:
                 self.active_games.pop(channel_id, None)
 
@@ -1201,16 +1209,11 @@ class GameSystem:
             await ctx.send("❌ هذا الأمر داخل السيرفر فقط.")
             return
 
-        if not self.can_use_games(
-            ctx.guild.id,
-            ctx.channel.id,
-            ctx.author,
-        ):
+        if not self.can_use_games(ctx.guild.id, ctx.channel.id, ctx.author):
             await ctx.send("❌ ما عندك الصلاحية المطلوبة لعرض الألعاب هنا.")
             return
 
         lines = ["🎮 **أوامر الألعاب:**", ""]
-
         for key, emoji, title, command_name in GAMES:
             lines.append(f"{emoji} `{PREFIX}{command_name}` — {title}")
 
@@ -1252,7 +1255,6 @@ class GameSystem:
             channel.id,
             role.id,
         )
-
         if not saved:
             await ctx.send("❌ تعذر حفظ الإعداد في قاعدة البيانات.")
             return
@@ -1295,7 +1297,6 @@ class GameSystem:
             channel.id,
             role.id,
         )
-
         if not saved:
             await interaction.response.send_message(
                 "❌ تعذر حفظ الإعداد.",
@@ -1408,13 +1409,11 @@ class GameSystem:
             return
 
         state = self.active_games.get(ctx.channel.id)
-
         if not state:
             await ctx.send("ℹ️ لا توجد لعبة شغالة في هذا الروم.")
             return
 
         task = state.get("task")
-
         if task and not task.done():
             task.cancel()
 
@@ -1432,20 +1431,14 @@ class GameSystem:
             return
 
         state = self.active_games.get(message.channel.id)
-
         if not state or state.get("ended").is_set():
             return
 
         answer = state.get("answer")
-
         if answer is None:
             return
 
-        if matches_answer(
-            message.content,
-            answer,
-            state.get("aliases"),
-        ):
+        if matches_answer(message.content, answer, state.get("aliases")):
             state["winner"] = message.author
             state["ended"].set()
 
@@ -1464,1060 +1457,9 @@ class GameSystem:
         image=None,
     ):
         state = self.active_games.get(channel.id)
-
         if not state:
             return None
 
         state["answer"] = answer
         state["aliases"] = aliases or []
         state["winner"] = None
-        state["ended"] = asyncio.Event()
-
-        game_embed = embed(title, description)
-
-        if isinstance(image, discord.File):
-            game_embed.set_image(url="attachment://game_drawing.png")
-            await channel.send(embed=game_embed, file=image)
-        elif image:
-            game_embed.set_image(url=image)
-            await channel.send(embed=game_embed)
-        else:
-            await channel.send(embed=game_embed)
-
-        try:
-            await asyncio.wait_for(
-                state["ended"].wait(),
-                timeout=timeout,
-            )
-        except asyncio.TimeoutError:
-            pass
-
-        winner = state.get("winner")
-
-        if winner:
-            await self.winner(channel, winner)
-        else:
-            await channel.send(f"⏰ انتهى الوقت! الإجابة: **{answer}**")
-
-        return winner
-
-    # ========================================================
-    # WINNER + POINTS
-    # ========================================================
-
-    async def winner(self, channel, member, points=WIN_POINTS):
-        if member is None:
-            return
-
-        self.points[member.id] = self.points.get(member.id, 0) + points
-
-        await channel.send(
-            embed=embed(
-                "🏆 الفائز!",
-                f"🎉 الفائز: {member.mention}\n⭐ النقاط: **+{points}**",
-                discord.Color.green(),
-            )
-        )
-
-        guild = getattr(channel, "guild", None)
-
-        if guild is None:
-            return
-
-        try:
-            self.bot.database.add_win(guild.id, member.id, points)
-        except Exception:
-            traceback.print_exc()
-
-        try:
-            game_key = self.active_games.get(channel.id, {}).get("game", "unknown")
-            self.bot.database.add_game_history(
-                guild.id,
-                channel.id,
-                GAME_NAMES.get(game_key, game_key),
-                member.id,
-                points,
-            )
-        except Exception:
-            traceback.print_exc()
-
-    # ========================================================
-    # MULTIPLAYER JOIN HELPER
-    # ========================================================
-
-    async def collect_players(
-        self,
-        channel,
-        title,
-        description,
-        minimum=2,
-        maximum=20,
-        timeout=30,
-    ):
-        view = JoinView(
-            minimum=minimum,
-            maximum=maximum,
-            timeout=timeout,
-        )
-
-        await channel.send(
-            embed=embed(
-                title,
-                description + "\n\nاضغط زر الانضمام.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-        players = list(view.players.values())
-
-        if len(players) < minimum:
-            await channel.send(
-                f"❌ لم يكتمل العدد المطلوب. تحتاج {minimum} لاعبين على الأقل."
-            )
-            return []
-
-        return players
-
-    # ========================================================
-    # GAME 1 - ROULETTE
-    # ========================================================
-
-    async def game_roulette(self, channel):
-        players = await self.collect_players(
-            channel,
-            "🎯 روليت",
-            "لعبة إقصاء عشوائي بدون رهانات.",
-            2,
-            20,
-            ROULETTE_TIME,
-        )
-
-        if not players:
-            return
-
-        while len(players) > 1:
-            await asyncio.sleep(2)
-            eliminated = random.choice(players)
-            players.remove(eliminated)
-            await channel.send(f"🎯 خرج {eliminated.mention} من الجولة!")
-
-        await self.winner(channel, players[0])
-
-    # ========================================================
-    # GAME 2 - XO
-    # ========================================================
-
-    async def game_xo(self, channel):
-        await self.play_xo(channel, fiery=False)
-
-    # ========================================================
-    # GAME 3 - MAFIA
-    # ========================================================
-
-    async def game_mafia(self, channel):
-        players = await self.collect_players(
-            channel,
-            "🕵️ مافيا",
-            "انضم للعبة. تحتاج 4 لاعبين على الأقل.",
-            4,
-            12,
-            30,
-        )
-
-        if not players:
-            return
-
-        mafia_count = max(1, len(players) // 4)
-        mafia = random.sample(players, mafia_count)
-        mafia_ids = {player.id for player in mafia}
-
-        for player in players:
-            try:
-                if player.id in mafia_ids:
-                    await player.send(
-                        "🕵️ دورك: **مافيا**. حاول ألا تكشف هويتك."
-                    )
-                else:
-                    await player.send(
-                        "👤 دورك: **مواطن**. حاول اكتشاف المافيا."
-                    )
-            except discord.HTTPException:
-                pass
-
-        await channel.send(
-            f"🕵️ بدأت المافيا!\n👥 اللاعبون: **{len(players)}**\n"
-            f"🕵️ المافيا: **{mafia_count}**\n"
-            f"⏱️ تنتهي الجولة خلال {MAFIA_TIME} ثانية."
-        )
-
-        await asyncio.sleep(MAFIA_TIME)
-
-        survivors = [p for p in players if p.id not in mafia_ids]
-        winner = random.choice(survivors or players)
-
-        await channel.send(
-            "🔎 انتهت الجولة. تم كشف الأدوار:\n"
-            + "\n".join(
-                f"{'🕵️ مافيا' if p.id in mafia_ids else '👤 مواطن'}: {p.mention}"
-                for p in players
-            )
-        )
-
-        await self.winner(channel, winner)
-
-    # ========================================================
-    # GAME 4 - MUSICAL CHAIRS
-    # ========================================================
-
-    async def game_musical_chairs(self, channel):
-        players = await self.collect_players(
-            channel,
-            "🪑 الكراسي الموسيقية",
-            "ابقَ حتى تكون آخر لاعب.",
-            3,
-            20,
-            30,
-        )
-
-        if not players:
-            return
-
-        while len(players) > 1:
-            await channel.send("🎵 الموسيقى شغالة...")
-            await asyncio.sleep(2)
-            eliminated = random.choice(players)
-            players.remove(eliminated)
-            await channel.send(
-                f"🪑 توقفت الموسيقى! خرج {eliminated.mention}."
-            )
-            await asyncio.sleep(1)
-
-        await self.winner(channel, players[0])
-
-    # ========================================================
-    # GAME 5 - ROCK PAPER SCISSORS
-    # ========================================================
-
-    async def game_rps(self, channel):
-        players = await self.collect_players(
-            channel,
-            "🪨 حجر ورق مقص",
-            "أول لاعبين ينضمان يدخلان الجولة.",
-            2,
-            2,
-            30,
-        )
-
-        if len(players) != 2:
-            return
-
-        choices = {}
-        allowed = {
-            "حجر": "rock",
-            "ورق": "paper",
-            "مقص": "scissors",
-            "rock": "rock",
-            "paper": "paper",
-            "scissors": "scissors",
-        }
-
-        await channel.send(
-            "اكتبوا اختياركم برسالة:\n`حجر` أو `ورق` أو `مقص`."
-        )
-
-        async def get_choice(player):
-            def check(message):
-                return (
-                    message.author.id == player.id
-                    and message.channel.id == channel.id
-                    and normalize(message.content) in {
-                        normalize(k) for k in allowed
-                    }
-                )
-
-            message = await self.bot.wait_for(
-                "message",
-                timeout=FAST_GAME_TIME,
-                check=check,
-            )
-            choices[player.id] = allowed[normalize(message.content)]
-
-        try:
-            await asyncio.gather(
-                get_choice(players[0]),
-                get_choice(players[1]),
-            )
-        except asyncio.TimeoutError:
-            await channel.send("⏰ انتهى الوقت قبل أن يختار اللاعبان.")
-            return
-
-        a = choices[players[0].id]
-        b = choices[players[1].id]
-
-        if a == b:
-            await channel.send("🤝 تعادل! أعد تشغيل اللعبة لجولة جديدة.")
-            return
-
-        wins = {
-            ("rock", "scissors"),
-            ("paper", "rock"),
-            ("scissors", "paper"),
-        }
-
-        await self.winner(
-            channel,
-            players[0] if (a, b) in wins else players[1],
-        )
-
-    # ========================================================
-    # GAME 6 - FIERY XO
-    # ========================================================
-
-    async def game_fiery_xo(self, channel):
-        await self.play_xo(channel, fiery=True)
-
-    # ========================================================
-    # XO ENGINE
-    # ========================================================
-
-    async def play_xo(self, channel, fiery=False):
-        players = await self.collect_players(
-            channel,
-            "🔥 إكس أو النارية" if fiery else "❌⭕ إكس أو",
-            "تحتاج لاعبين اثنين.",
-            2,
-            2,
-            30,
-        )
-
-        if len(players) != 2:
-            return
-
-        board = ["⬜"] * 9
-        symbols = {
-            players[0].id: "❌",
-            players[1].id: "⭕",
-        }
-        current_index = 0
-        fire_cells = random.sample(range(9), 2) if fiery else []
-
-        combinations = [
-            (0, 1, 2),
-            (3, 4, 5),
-            (6, 7, 8),
-            (0, 3, 6),
-            (1, 4, 7),
-            (2, 5, 8),
-            (0, 4, 8),
-            (2, 4, 6),
-        ]
-
-        def render():
-            shown = [
-                "🔥" if fiery and i in fire_cells and board[i] == "⬜"
-                else board[i]
-                for i in range(9)
-            ]
-            return (
-                f"{shown[0]} {shown[1]} {shown[2]}\n"
-                f"{shown[3]} {shown[4]} {shown[5]}\n"
-                f"{shown[6]} {shown[7]} {shown[8]}"
-            )
-
-        await channel.send(
-            f"**{'🔥 إكس أو النارية' if fiery else '❌⭕ إكس أو'}**\n"
-            f"{render()}\n\nاكتب رقم الخانة من 1 إلى 9."
-        )
-
-        for _ in range(9):
-            player = players[current_index]
-
-            def check(message):
-                return (
-                    message.channel.id == channel.id
-                    and message.author.id == player.id
-                    and message.content.strip() in {
-                        str(i) for i in range(1, 10)
-                    }
-                )
-
-            try:
-                message = await self.bot.wait_for(
-                    "message",
-                    timeout=120,
-                    check=check,
-                )
-            except asyncio.TimeoutError:
-                await channel.send("⏰ انتهى وقت اللعبة.")
-                return
-
-            index = int(message.content.strip()) - 1
-
-            if board[index] != "⬜":
-                await channel.send(
-                    "❌ الخانة مستخدمة. انتهت فرصتك لهذا الدور."
-                )
-                current_index = 1 - current_index
-                continue
-
-            if fiery and index in fire_cells:
-                winner = players[1 - current_index]
-                await channel.send(
-                    f"🔥 ضغط {player.mention} على خانة نارية وخسر!\n"
-                    f"🏆 الفائز: {winner.mention}"
-                )
-                await self.winner(channel, winner)
-                return
-
-            board[index] = symbols[player.id]
-
-            for a, b, c in combinations:
-                if (
-                    board[a] == board[b] == board[c]
-                    and board[a] in ("❌", "⭕")
-                ):
-                    await channel.send(
-                        f"{render()}\n\n🏆 الفائز: {player.mention}"
-                    )
-                    await self.winner(channel, player)
-                    return
-
-            await channel.send(render())
-            current_index = 1 - current_index
-
-        await channel.send("🤝 انتهت اللعبة بالتعادل.")
-
-    # ========================================================
-    # GAME 7 - HIDE AND SEEK
-    # ========================================================
-
-    async def game_hide_seek(self, channel):
-        players = await self.collect_players(
-            channel,
-            "👀 الغميضة",
-            "انضم للعبة.",
-            3,
-            15,
-            30,
-        )
-
-        if len(players) < 3:
-            return
-
-        seeker = random.choice(players)
-        hidden = random.choice([
-            p for p in players if p.id != seeker.id
-        ])
-
-        await channel.send(
-            f"👀 الباحث: {seeker.mention}\n"
-            f"🙈 تم اختيار المختبئ. أمام الباحث {HIDE_SEEK_TIME} ثانية."
-        )
-
-        await asyncio.sleep(HIDE_SEEK_TIME)
-        await channel.send(f"🔎 كان المختبئ: {hidden.mention}")
-        await self.winner(channel, seeker)
-
-    # ========================================================
-    # GAME 8 - REPLIKA
-    # ========================================================
-
-    async def game_replika(self, channel):
-        sentence = random.choice([
-            "انا احب البرمجة",
-            "اليوم الجو جميل",
-            "البوت سريع جدا",
-            "الالعاب ممتعة",
-            "هذا اختبار سرعة",
-            "ديسكورد رائع",
-        ])
-
-        await self.text_round(
-            channel,
-            "🤖 ريبلكا",
-            f"انسخ الجملة كما هي:\n\n**{sentence}**",
-            sentence,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 9 - GUESS COUNTRY
-    # ========================================================
-
-    async def game_guess_country(self, channel):
-        country, aliases, code, clue = self.pick_nonrepeating(
-            channel,
-            "country",
-            FLAGS,
-        )
-
-        await self.text_round(
-            channel,
-            "🌍 خمن الدولة",
-            f"💡 التلميح: {clue}",
-            country,
-            aliases,
-            GUESS_TIME,
-        )
-
-    # ========================================================
-    # GAME 10 - GUESS DRAWING
-    # ========================================================
-
-    async def game_guess_drawing(self, channel):
-        item = self.pick_nonrepeating(
-            channel,
-            "drawing",
-            DRAWINGS,
-        )
-
-        try:
-            image_file = make_drawing_file(item["kind"])
-        except Exception:
-            traceback.print_exc()
-            await channel.send(
-                "❌ تعذر إنشاء الرسمة. تأكد من تثبيت Pillow في requirements.txt."
-            )
-            return
-
-        await self.text_round(
-            channel,
-            "🎨 خمن الرسمة",
-            f"ما الموجود في الصورة؟\n"
-            f"🔤 عدد الحروف: **{len(item['answer'].replace(' ', ''))}**",
-            item["answer"],
-            item["aliases"],
-            GUESS_TIME,
-            image_file,
-        )
-
-    # ========================================================
-    # GAME 11 - GUESS WORD
-    # ========================================================
-
-    async def game_guess_word(self, channel):
-        word, aliases = random.choice(WORDS)
-        masked = " ".join(
-            "⬜" if not char.isspace() else " "
-            for char in word
-        )
-
-        await self.text_round(
-            channel,
-            "📝 خمن الكلمة",
-            f"الكلمة:\n\n{masked}\n\n🔤 عدد الحروف: **{len(word)}**",
-            word,
-            aliases,
-            GUESS_TIME,
-        )
-
-    # ========================================================
-    # GAME 12 - FAST CLICK
-    # ========================================================
-
-    async def game_fast_click(self, channel):
-        await channel.send("⚡ استعد...")
-        await asyncio.sleep(random.uniform(2, 5))
-
-        view = FastClickView()
-
-        await channel.send(
-            embed=embed(
-                "⚡ اضغط الآن!",
-                "أول شخص يضغط الزر يفوز.",
-            ),
-            view=view,
-        )
-
-        await view.wait()
-
-        if view.winner:
-            await self.winner(channel, view.winner)
-        else:
-            await channel.send("⏰ لم يضغط أحد في الوقت المحدد.")
-
-    # ========================================================
-    # GAME 13 - FAST TYPE
-    # ========================================================
-
-    async def game_fast_type(self, channel):
-        text = random.choice([
-            "سرعة",
-            "ديسكورد",
-            "العاب",
-            "برمجة",
-            "بوت",
-            "مسابقة",
-            "تحدي",
-            "سرعة الكتابة",
-        ])
-
-        await self.text_round(
-            channel,
-            "⌨️ الكتابة السريعة",
-            f"اكتب الكلمة بالضبط:\n\n**{text}**",
-            text,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 14 - TEXT SPLIT
-    # ========================================================
-
-    async def game_text_split(self, channel):
-        word = random.choice([
-            "ديسكورد",
-            "برمجة",
-            "مسابقة",
-            "روبوت",
-            "العاب",
-            "تحدي",
-        ])
-        answer = " ".join(word)
-
-        await self.text_round(
-            channel,
-            "✂️ فصل النص",
-            f"افصل الحروف بمسافات:\n\n**{word}**\n\nمثال: `{answer}`",
-            answer,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 15 - MERGE TEXT
-    # ========================================================
-
-    async def game_merge_text(self, channel):
-        word = random.choice([
-            "د ي س ك و ر د",
-            "ب ر م ج ة",
-            "م س ا ب ق ة",
-            "ا ل ع ا ب",
-            "ت ح د ي",
-        ])
-        answer = word.replace(" ", "")
-
-        await self.text_round(
-            channel,
-            "🔗 دمج النص",
-            f"ادمج الحروف:\n\n**{word}**",
-            answer,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 16 - GUESS FLAG
-    # ========================================================
-
-    async def game_guess_flag(self, channel):
-        country, aliases, code, clue = self.pick_nonrepeating(
-            channel,
-            "flag",
-            FLAGS,
-        )
-
-        await self.text_round(
-            channel,
-            "🏳️ خمن العلم",
-            "ما الدولة صاحبة هذا العلم؟",
-            country,
-            aliases,
-            GUESS_TIME,
-            f"https://flagcdn.com/w640/{code}.png",
-        )
-
-    # ========================================================
-    # GAME 17 - TEXT REVERSE
-    # ========================================================
-
-    async def game_text_reverse(self, channel):
-        word = random.choice([
-            "ديسكورد",
-            "العاب",
-            "مسابقة",
-            "برمجة",
-            "بوت",
-            "تحدي",
-        ])
-
-        await self.text_round(
-            channel,
-            "🔄 عكس النص",
-            f"اعكس النص:\n\n**{word}**",
-            word[::-1],
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 18 - FIND LETTER
-    # ========================================================
-
-    async def game_find_letter(self, channel):
-        letters = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
-        target = random.choice(letters)
-        other_letters = [x for x in letters if x != target]
-        sequence = [
-            random.choice(other_letters)
-            for _ in range(49)
-        ]
-        sequence.insert(random.randint(0, 49), target)
-
-        await self.text_round(
-            channel,
-            "🔤 ابحث عن الحرف",
-            f"الحرف المطلوب: **{target}**\n\n"
-            + " ".join(sequence),
-            target,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 19 - CORRECT LETTER
-    # ========================================================
-
-    async def game_correct_letter(self, channel):
-        letters = list("ابتثجحخدذرزسشصضطظعغفقكلمنهوي")
-        target = random.choice(letters)
-        fake = random.choice([
-            x for x in letters if x != target
-        ])
-        sequence = [fake for _ in range(30)]
-        correct_index = random.randrange(30)
-        sequence[correct_index] = target
-
-        await self.text_round(
-            channel,
-            "✅ الحرف الصحيح",
-            f"الحرف المطلوب: **{target}**\n\n"
-            + " ".join(sequence)
-            + "\n\nأرسل رقم مكانه من 1 إلى 30.",
-            str(correct_index + 1),
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 20 - SORT NUMBERS
-    # ========================================================
-
-    async def game_sort_numbers(self, channel):
-        numbers = random.sample(range(1, 50), 6)
-        scrambled = numbers[:]
-        random.shuffle(scrambled)
-        answer = " ".join(str(n) for n in sorted(numbers))
-
-        await self.text_round(
-            channel,
-            "🔢 ترتيب الأرقام",
-            "رتب الأرقام من الأصغر إلى الأكبر:\n\n"
-            + " — ".join(str(n) for n in scrambled)
-            + "\n\nمثال: `1 2 3 4 5 6`",
-            answer,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 21 - GUESS COLOR
-    # ========================================================
-
-    async def game_guess_color(self, channel):
-        name, aliases, emoji = random.choice(COLORS)
-
-        await self.text_round(
-            channel,
-            "🎨 خمن اللون",
-            f"اللون الظاهر:\n\n# {emoji}\n\nاكتب اسم اللون.",
-            name,
-            aliases,
-            GUESS_TIME,
-        )
-
-    # ========================================================
-    # GAME 22 - FIND EMOJI
-    # ========================================================
-
-    async def game_find_emoji(self, channel):
-        emojis = [
-            "😀", "😂", "😎", "🤖", "🐱",
-            "🐶", "🍎", "🍕", "⚽", "🔥",
-        ]
-
-        target = random.choice(emojis)
-        others = [x for x in emojis if x != target]
-        sequence = [
-            random.choice(others)
-            for _ in range(49)
-        ]
-        sequence.insert(random.randint(0, 49), target)
-
-        await self.text_round(
-            channel,
-            "🔎 ابحث عن الإيموجي",
-            f"الإيموجي المطلوب: **{target}**\n\n"
-            + " ".join(sequence),
-            target,
-            timeout=TEXT_GAME_TIME,
-        )
-
-    # ========================================================
-    # GAME 23 - TEXT REVEAL
-    # ========================================================
-
-    async def game_text_reveal(self, channel):
-        word, aliases = random.choice(WORDS)
-        visible = set()
-        state = self.active_games.get(channel.id)
-
-        if not state:
-            return
-
-        state["answer"] = word
-        state["aliases"] = aliases
-        state["winner"] = None
-        state["ended"] = asyncio.Event()
-
-        def masked():
-            output = []
-
-            for index, char in enumerate(word):
-                if char.isspace():
-                    output.append(" ")
-                elif index in visible:
-                    output.append(char)
-                else:
-                    output.append("⬜")
-
-            return " ".join(output)
-
-        message = await channel.send(
-            embed=embed(
-                "👁️ كشف النص",
-                f"الكلمة تحتوي على **{len(word)} حروف**.\n\n"
-                f"{masked()}\n\nسيتم كشف حروف تدريجيًا.",
-            )
-        )
-
-        reveal_count = min(
-            3,
-            len([c for c in word if not c.isspace()]),
-        )
-
-        for _ in range(reveal_count):
-            try:
-                await asyncio.wait_for(
-                    state["ended"].wait(),
-                    timeout=5,
-                )
-                break
-            except asyncio.TimeoutError:
-                pass
-
-            if self.active_games.get(channel.id) is not state:
-                return
-
-            available = [
-                i for i, char in enumerate(word)
-                if not char.isspace() and i not in visible
-            ]
-
-            if not available:
-                break
-
-            visible.add(random.choice(available))
-
-            try:
-                await message.edit(
-                    embed=embed(
-                        "👁️ كشف النص",
-                        f"الكلمة تحتوي على **{len(word)} حروف**.\n\n"
-                        f"{masked()}\n\n💡 حاول التخمين!",
-                    )
-                )
-            except discord.HTTPException:
-                pass
-
-        if not state["ended"].is_set():
-            try:
-                await asyncio.wait_for(
-                    state["ended"].wait(),
-                    timeout=max(1, TEXT_GAME_TIME - reveal_count * 5),
-                )
-            except asyncio.TimeoutError:
-                pass
-
-        winner = state.get("winner")
-
-        if winner:
-            await self.winner(channel, winner)
-        else:
-            await channel.send(f"⏰ الإجابة: **{word}**")
-
-    # ========================================================
-    # GAME 24 - WHEEL
-    # ========================================================
-
-    async def game_wheel(self, channel):
-        players = await self.collect_players(
-            channel,
-            "🎡 عجلة الإقصاء",
-            "انضم للعجلة!\n"
-            "🎯 تحتاج 4 لاعبين على الأقل.\n"
-            "🎲 في كل جولة تختار العجلة لاعبًا واحدًا ليقرر طريقة الإقصاء.\n"
-            "🛡️ إذا تجاوز العدد 5 لاعبين، يحصل لاعب عشوائي على حصانة مرة واحدة.",
-            minimum=4,
-            maximum=100,
-            timeout=45,
-        )
-
-        if len(players) < 4:
-            return
-
-        # إذا تجاوز العدد خمسة، يحصل لاعب عشوائي على حصانة سرية.
-        immune_player = random.choice(players) if len(players) > 5 else None
-        immunity_used = False
-
-        if immune_player:
-            try:
-                await immune_player.send(
-                    "🛡️ **حصانة عجلة الإقصاء**\n"
-                    "أنت حصلت على حصانة سرية لمرة واحدة.\n"
-                    "إذا اختارك لاعب للإخراج، ستمنع خروجك وتُستهلك الحصانة."
-                )
-            except discord.HTTPException:
-                pass
-
-        # كل خيار له فترة انتظار مستقلة للجولات التالية.
-        action_ready_round = {}
-        round_number = 1
-
-        await channel.send(
-            embed=embed(
-                "🎡 بدأت عجلة الإقصاء!",
-                f"👥 عدد اللاعبين: **{len(players)}**\n"
-                "🎡 ستدور العجلة في كل جولة حتى يبقى لاعب واحد.\n"
-                "🛡️ الحصانة - إن وُجدت - سرية.",
-            )
-        )
-
-        while len(players) > 1:
-            state = self.active_games.get(channel.id)
-            if not state:
-                return
-
-            await channel.send(
-                embed=embed(
-                    "🎡 العجلة تدور...",
-                    "🔄 يجري اختيار لاعب عشوائيًا...",
-                )
-            )
-
-            animation_steps = min(12, max(6, len(players) + 4))
-
-            for step in range(animation_steps):
-                shown_player = random.choice(players)
-
-                await channel.send(
-                    f"🎡 {'🔄' if step % 2 == 0 else '✨'} "
-                    f"**{shown_player.display_name}**"
-                )
-
-                await asyncio.sleep(0.25 + step * 0.025)
-
-            selected_player = random.choice(players)
-
-            await channel.send(
-                embed=embed(
-                    "🎯 توقفت العجلة!",
-                    f"اختارت العجلة: {selected_player.mention}\n"
-                    "هذا اللاعب وحده يحق له اختيار طريقة الإخراج.",
-                    discord.Color.gold(),
-                )
-            )
-
-            view = WheelActionView(
-                players=players,
-                selected_player=selected_player,
-                round_number=round_number,
-                action_ready_round=action_ready_round,
-            )
-
-            await channel.send(
-                f"🎮 {selected_player.mention}، اختر الإجراء من القائمة:",
-                view=view,
-            )
-
-            await view.wait()
-
-            if view.target is None:
-                candidates = [
-                    player for player in players
-                    if player.id != selected_player.id
-                ]
-
-                if not candidates:
-                    break
-
-                target = random.choice(candidates)
-
-                await channel.send(
-                    f"⏰ لم يختر {selected_player.mention} خلال المهلة.\n"
-                    f"🎲 تم اختيار {target.mention} عشوائيًا للإقصاء."
-                )
-            else:
-                target = view.target
-
-            if target not in players:
-                round_number += 1
-                continue
-
-            if (
-                immune_player is not None
-                and target.id == immune_player.id
-                and not immunity_used
-            ):
-                immunity_used = True
-
-                await channel.send(
-                    embed=embed(
-                        "🛡️ الحصانة فعّالة!",
-                        f"تم اختيار {target.mention} للإقصاء، "
-                        "لكن لديه حصانة!\n"
-                        "لن يخرج في هذه المرة، وقد استُهلكت حصانته.",
-                        discord.Color.green(),
-                    )
-                )
-            else:
-                players.remove(target)
-
-                await channel.send(
-                    embed=embed(
-                        "🚪 تم إقصاء لاعب",
-                        f"خرج {target.mention} من العجلة.\n"
-                        f"👥 اللاعبون المتبقون: **{len(players)}**",
-                        discord.Color.red(),
-                    )
-                )
-
-            round_number += 1
-
-            if len(players) > 1:
-                await asyncio.sleep(1)
-
-        if len(players) == 1:
-            await channel.send(
-                embed=embed(
-                    "🏆 انتهت عجلة الإقصاء!",
-                    f"🎉 الفائز الأخير هو: {players[0].mention}",
-                    discord.Color.green(),
-                )
-            )
-            await self.winner(channel, players[0])
-        else:
-            await channel.send("انتهت اللعبة دون وجود فائز.")
-
-
-# ============================================================
-# EXPORT
-# ============================================================
-
-__all__ = ["GameSystem"]
